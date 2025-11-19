@@ -74,7 +74,7 @@ export default function Navigation({ isAuthenticated: propIsAuthenticated, userN
               {userName || 'Hesabım'}
             </button>
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-slate-800/95 backdrop-blur border border-slate-700/50 rounded-lg shadow-lg py-2 z-50">
+              <div className="absolute right-0 mt-2 w-48 bg-slate-800/98 border border-slate-700/50 rounded-lg shadow-lg py-2 z-50">
                 <Link
                   href="/dashboard"
                   className="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-blue-400 transition font-light"
