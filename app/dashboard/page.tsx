@@ -49,38 +49,41 @@ export default function DashboardPage() {
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-    setUser(currentUser);
-    
-    // Get user's appointments
-    const allAppointments = getAllAppointments();
-    const userAppointments = allAppointments
-      .filter(apt => apt.userId === currentUser.id)
-      .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB.getTime() - dateA.getTime();
-      });
-    setAppointments(userAppointments);
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(currentUser);
+      
+      // Get user's appointments
+      const allAppointments = getAllAppointments();
+      const userAppointments = allAppointments
+        .filter(apt => apt.userId === currentUser.id)
+        .sort((a, b) => {
+          const dateA = new Date(`${a.date}T${a.time}`);
+          const dateB = new Date(`${b.date}T${b.time}`);
+          return dateB.getTime() - dateA.getTime();
+        });
+      setAppointments(userAppointments);
 
-    // Get upcoming appointments (not cancelled, future dates)
-    const now = new Date();
-    const upcoming = userAppointments
-      .filter(apt => {
-        const appointmentDate = new Date(`${apt.date}T${apt.time}`);
-        return apt.status !== 'cancelled' && appointmentDate >= now;
-      })
-      .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
-        return dateA.getTime() - dateB.getTime();
-      })
-      .slice(0, 3);
-    setUpcomingAppointments(upcoming);
+      // Get upcoming appointments (not cancelled, future dates)
+      const now = new Date();
+      const upcoming = userAppointments
+        .filter(apt => {
+          const appointmentDate = new Date(`${apt.date}T${apt.time}`);
+          return apt.status !== 'cancelled' && appointmentDate >= now;
+        })
+        .sort((a, b) => {
+          const dateA = new Date(`${a.date}T${a.time}`);
+          const dateB = new Date(`${b.date}T${b.time}`);
+          return dateA.getTime() - dateB.getTime();
+        })
+        .slice(0, 3);
+      setUpcomingAppointments(upcoming);
+    };
+    checkAuth();
   }, [router]);
 
   const getStats = () => {

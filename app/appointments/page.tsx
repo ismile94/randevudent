@@ -58,37 +58,40 @@ export default function AppointmentsPage() {
   const [filterDate, setFilterDate] = useState<'all' | 'upcoming' | 'past'>('all');
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-    setUser(currentUser);
-    
-    // Get user's appointments
-    const allAppointments = getAllAppointments();
-    let userAppointments = allAppointments
-      .filter(apt => apt.userId === currentUser.id)
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(currentUser);
+      
+      // Get user's appointments
+      const allAppointments = getAllAppointments();
+      let userAppointments = allAppointments
+        .filter(apt => apt.userId === currentUser.id)
       .sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
         return dateB.getTime() - dateA.getTime();
-      });
-    
-    // Apply filters
-    if (filterStatus !== 'all') {
-      userAppointments = userAppointments.filter(apt => apt.status === filterStatus);
-    }
-    
-    if (filterDate !== 'all') {
-      const now = new Date();
-      userAppointments = userAppointments.filter(apt => {
-        const appointmentDate = new Date(`${apt.date}T${apt.time}`);
-        return filterDate === 'upcoming' ? appointmentDate >= now : appointmentDate < now;
-      });
-    }
-    
-    setAppointments(userAppointments);
+        });
+      
+      // Apply filters
+      if (filterStatus !== 'all') {
+        userAppointments = userAppointments.filter(apt => apt.status === filterStatus);
+      }
+      
+      if (filterDate !== 'all') {
+        const now = new Date();
+        userAppointments = userAppointments.filter(apt => {
+          const appointmentDate = new Date(`${apt.date}T${apt.time}`);
+          return filterDate === 'upcoming' ? appointmentDate >= now : appointmentDate < now;
+        });
+      }
+      
+      setAppointments(userAppointments);
+    };
+    checkAuth();
   }, [router, filterStatus, filterDate]);
 
   const handleCancelAppointment = (appointmentId: string) => {

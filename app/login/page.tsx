@@ -71,9 +71,9 @@ function LoginPageContent() {
 
     setIsSubmitting(true);
     
-    setTimeout(() => {
+    try {
       // First try patient login
-      const patientResult = loginUser(formData.email, formData.password);
+      const patientResult = await loginUser(formData.email, formData.password);
       
       if (patientResult.success && patientResult.user) {
         setIsSubmitting(false);
@@ -87,6 +87,16 @@ function LoginPageContent() {
             router.push('/dashboard');
           }
           router.refresh();
+        }, 1500);
+        return;
+      }
+      
+      // Check if email is not verified
+      if (patientResult.error === 'email_not_verified' && patientResult.user) {
+        setIsSubmitting(false);
+        showToast('E-posta adresinizi doğrulamanız gerekiyor. Yönlendiriliyorsunuz...', 'error');
+        setTimeout(() => {
+          router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
         }, 1500);
         return;
       }
@@ -149,7 +159,10 @@ function LoginPageContent() {
       // Both failed
       setIsSubmitting(false);
       showToast('E-posta veya şifre hatalı!', 'error');
-    }, 500);
+    } catch (error: any) {
+      setIsSubmitting(false);
+      showToast(error.message || 'Giriş başarısız!', 'error');
+    }
   };
 
   const updateFormData = (field: string, value: string) => {

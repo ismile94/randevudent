@@ -163,17 +163,18 @@ export default function EditAppointmentPage() {
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-    setUser(currentUser);
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(currentUser);
 
-    const appointmentId = params?.id as string;
-    if (appointmentId) {
-      const foundAppointment = getAppointmentById(appointmentId);
-      if (!foundAppointment || foundAppointment.userId !== currentUser.id) {
+      const appointmentId = params?.id as string;
+      if (appointmentId) {
+        const foundAppointment = getAppointmentById(appointmentId);
+        if (!foundAppointment || foundAppointment.userId !== currentUser.id) {
         router.push('/appointments');
         return;
       }
@@ -192,7 +193,9 @@ export default function EditAppointmentPage() {
         const dates = getAvailableDates(clinicData.workingHours);
         setAvailableDates(dates);
       }
-    }
+      }
+    };
+    checkAuth();
   }, [params, router]);
 
   useEffect(() => {

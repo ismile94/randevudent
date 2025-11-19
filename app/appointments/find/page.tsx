@@ -204,15 +204,18 @@ export default function FindAppointmentPage() {
   const [viewMode, setViewMode] = useState<'clinic' | 'doctor'>('clinic');
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      showToast('Randevu almak için giriş yapmanız gerekiyor', 'error');
-      setTimeout(() => {
-        router.push(`/login?redirect=/appointments/find`);
-      }, 1500);
-      return;
-    }
-    setUser(currentUser);
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        showToast('Randevu almak için giriş yapmanız gerekiyor', 'error');
+        setTimeout(() => {
+          router.push(`/login?redirect=/appointments/find`);
+        }, 1500);
+        return;
+      }
+      setUser(currentUser);
+    };
+    checkAuth();
   }, [router]);
 
   // Kademeli filtreleme: Her filtre bir sonraki filtreyi daraltır

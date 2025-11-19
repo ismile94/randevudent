@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Mail, ArrowLeft, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { sendPasswordResetEmail } from '@/lib/auth';
 
 interface Toast {
   id: string;
@@ -47,15 +48,22 @@ export default function ForgotPasswordPage() {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    // TODO: API call to send password reset email
-    console.log('Password reset request for:', email);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const result = await sendPasswordResetEmail(email);
+      
       setIsSubmitting(false);
-      setEmailSent(true);
-      showToast('Şifre sıfırlama e-postası gönderildi!', 'success');
-    }, 1500);
+      
+      if (result.success) {
+        setEmailSent(true);
+        showToast('Şifre sıfırlama e-postası gönderildi! E-posta kutunuzu kontrol edin.', 'success');
+      } else {
+        showToast(result.error || 'E-posta gönderilemedi. Lütfen tekrar deneyin.', 'error');
+      }
+    } catch (error: any) {
+      setIsSubmitting(false);
+      showToast(error.message || 'E-posta gönderilemedi. Lütfen tekrar deneyin.', 'error');
+    }
   };
 
   if (emailSent) {

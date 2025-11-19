@@ -435,13 +435,15 @@ export default function ClinicDetailPage() {
   const [favorited, setFavorited] = useState(false);
 
   useEffect(() => {
-    // Check authentication from localStorage
-    const currentUser = getCurrentUser();
-    setIsAuthenticated(!!currentUser);
-    if (currentUser) {
-      setUser(currentUser);
-      setFavorited(isFavorited(currentUser.id, mockClinic.id));
-    }
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      setIsAuthenticated(!!currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        setFavorited(isFavorited(currentUser.id, mockClinic.id));
+      }
+    };
+    checkAuth();
   }, []);
 
   const clinic = mockClinic; // Supabase'den gelecek

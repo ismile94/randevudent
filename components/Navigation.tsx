@@ -14,21 +14,25 @@ export default function Navigation({ isAuthenticated: propIsAuthenticated, userN
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(propIsAuthenticated ?? false);
   const [userName, setUserName] = useState(propUserName);
+  const [logoError, setLogoError] = useState(false);
 
   useEffect(() => {
-    // Check authentication status from localStorage
-    const user = getCurrentUser();
-    if (user) {
-      setIsAuthenticated(true);
-      setUserName(user.name);
-    } else {
-      setIsAuthenticated(false);
-      setUserName(undefined);
-    }
+    // Check authentication status from Supabase
+    const checkAuth = async () => {
+      const user = await getCurrentUser();
+      if (user) {
+        setIsAuthenticated(true);
+        setUserName(user.name);
+      } else {
+        setIsAuthenticated(false);
+        setUserName(undefined);
+      }
+    };
+    checkAuth();
   }, []);
 
-  const handleLogout = () => {
-    logoutUser();
+  const handleLogout = async () => {
+    await logoutUser();
     setIsAuthenticated(false);
     setUserName(undefined);
     setShowUserMenu(false);
@@ -38,16 +42,19 @@ export default function Navigation({ isAuthenticated: propIsAuthenticated, userN
 
   return (
     <nav className="relative z-20 px-4 md:px-6 py-4 md:py-6 flex justify-between items-center max-w-7xl mx-auto gap-4">
-      <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-        <img 
-          src="https://i.ibb.co/YBy5fwQD/icon.png" 
-          alt="RandevuDent Logo" 
-          className="w-12 h-12 md:w-14 md:h-14 object-contain"
-          style={{ 
-            mixBlendMode: 'lighten'
-          }}
-        />
-        <span className="text-lg md:text-xl font-light tracking-wider">RandevuDent</span>
+      <Link href="/" className="flex items-center flex-shrink-0 group">
+        {!logoError ? (
+          <img 
+            src="/logo.png" 
+            alt="RandevuDent Logo" 
+            className="h-14 md:h-16 object-contain transition-all duration-300 hover:scale-110 hover:brightness-110 cursor-pointer"
+            onError={() => setLogoError(true)}
+          />
+        ) : (
+          <span className="text-xl md:text-2xl font-light tracking-wider transition-all duration-300 group-hover:text-blue-400 group-hover:scale-105 cursor-pointer">
+            RandevuDent
+          </span>
+        )}
       </Link>
       <div className="flex items-center gap-3 md:gap-6 flex-shrink-0">
         <div className="hidden md:flex gap-8 text-sm font-light">

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Lock, Eye, EyeOff, AlertCircle, CheckCircle2, X, ArrowLeft } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface Toast {
   id: string;
@@ -21,8 +22,8 @@ export default function ResetPasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     const id = Math.random().toString(36).substring(7);
@@ -34,24 +35,33 @@ export default function ResetPasswordPage() {
   };
 
   useEffect(() => {
-    // Get token from URL params
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tokenParam = params.get('token');
-      if (tokenParam) {
-        setToken(tokenParam);
-        // Store token for verification
-        localStorage.setItem('resetToken', tokenParam);
-        setIsLoading(false);
-      } else {
-        // If no token, redirect to forgot password
-        showToast('Geçersiz veya eksik şifre sıfırlama linki', 'error');
+    // Check if user has a valid session (from password recovery flow)
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          setIsAuthenticated(true);
+          setIsLoading(false);
+        } else {
+          // No session means user didn't come from password recovery link
+          showToast('Geçersiz veya eksik şifre sıfırlama linki', 'error');
+          setTimeout(() => {
+            router.push('/forgot-password');
+          }, 2000);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+        showToast('Bir hata oluştu', 'error');
         setTimeout(() => {
           router.push('/forgot-password');
         }, 2000);
         setIsLoading(false);
       }
-    }
+    };
+
+    checkSession();
   }, [router]);
 
   const removeToast = (id: string) => {
@@ -81,23 +91,37 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm() || !token) return;
+    if (!validateForm() || !isAuthenticated) return;
 
     setIsSubmitting(true);
-    // TODO: API call to reset password with token
-    console.log('Password reset attempt with token:', token);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      // Update password using Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: formData.password,
+      });
+
+      if (error) {
+        console.error('Error updating password:', error);
+        showToast(error.message || 'Şifre güncellenirken bir hata oluştu', 'error');
+        setIsSubmitting(false);
+        return;
+      }
+
       showToast('Şifreniz başarıyla güncellendi!', 'success');
-      // Clear token
-      localStorage.removeItem('resetToken');
+      
+      // Sign out the user after password reset
+      await supabase.auth.signOut();
+      
       // Redirect to login after success
       setTimeout(() => {
         router.push('/login?passwordReset=success');
       }, 2000);
-    }, 1500);
+    } catch (error: any) {
+      console.error('Error in password reset:', error);
+      showToast(error.message || 'Şifre güncellenirken bir hata oluştu', 'error');
+      setIsSubmitting(false);
+    }
   };
 
   const updateFormData = (field: string, value: string) => {
@@ -111,7 +135,7 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (isLoading || !token) {
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
         <div className="text-center">

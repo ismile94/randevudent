@@ -93,16 +93,16 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
     
-    // Register user using localStorage
-    const result = registerUser({
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      password: formData.password,
-      tcNumber: formData.tcNumber || undefined,
-    });
-    
-    setTimeout(() => {
+    try {
+      // Register user using Supabase
+      const result = await registerUser({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        tcNumber: formData.tcNumber || undefined,
+      });
+      
       setIsSubmitting(false);
       
       if (result.success) {
@@ -116,7 +116,10 @@ export default function RegisterPage() {
       } else {
         showToast(result.error || 'Kayıt başarısız!', 'error');
       }
-    }, 500);
+    } catch (error: any) {
+      setIsSubmitting(false);
+      showToast(error.message || 'Kayıt başarısız!', 'error');
+    }
   };
 
   const updateFormData = (field: string, value: string | boolean) => {

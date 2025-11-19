@@ -295,12 +295,15 @@ function BookAppointmentPageContent() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push(`/login?redirect=/appointments/book?clinicId=${clinicId}${doctorIdParam ? `&doctorId=${doctorIdParam}` : ''}${serviceParam ? `&service=${serviceParam}` : ''}${timeParam ? `&time=${timeParam}` : ''}`);
-      return;
-    }
-    setUser(currentUser);
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        router.push(`/login?redirect=/appointments/book?clinicId=${clinicId}${doctorIdParam ? `&doctorId=${doctorIdParam}` : ''}${serviceParam ? `&service=${serviceParam}` : ''}${timeParam ? `&time=${timeParam}` : ''}`);
+        return;
+      }
+      setUser(currentUser);
+    };
+    checkAuth();
   }, [router, clinicId, doctorIdParam, serviceParam, timeParam]);
 
   // Get available dates

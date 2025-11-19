@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import { getCurrentUser, getAllUsers, User } from '@/lib/auth';
+import { getCurrentUser, getAllUsers, updateUserProfile, loginUser, User } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import {
   User as UserIcon,
   Mail,
@@ -31,7 +32,7 @@ export default function ProfilePage() {
     name: '',
     email: '',
     phone: '',
-    tcNumber: '',
+    tc_number: '',
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -41,18 +42,21 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-    setUser(currentUser);
-    setFormData({
-      name: currentUser.name,
-      email: currentUser.email,
-      phone: currentUser.phone,
-      tcNumber: currentUser.tcNumber || '',
-    });
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(currentUser);
+      setFormData({
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: currentUser.phone,
+        tc_number: currentUser.tc_number || '',
+      });
+    };
+    checkAuth();
   }, [router]);
 
   const showToastMessage = (message: string, type: 'success' | 'error') => {
@@ -62,7 +66,7 @@ export default function ProfilePage() {
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!user) return;
 
     // Validate
@@ -79,48 +83,42 @@ export default function ProfilePage() {
       return;
     }
 
-    // Check if email is already taken by another user
-    const users = getAllUsers();
-    const emailExists = users.some(
-      u => u.email.toLowerCase() === formData.email.toLowerCase() && u.id !== user.id
-    );
-    if (emailExists) {
-      showToastMessage('Bu e-posta adresi başka bir kullanıcı tarafından kullanılıyor', 'error');
-      return;
-    }
+    try {
+      // Check if email is already taken by another user
+      const users = await getAllUsers();
+      const emailExists = users.some(
+        u => u.email.toLowerCase() === formData.email.toLowerCase() && u.id !== user.id
+      );
+      if (emailExists) {
+        showToastMessage('Bu e-posta adresi başka bir kullanıcı tarafından kullanılıyor', 'error');
+        return;
+      }
 
-    // Update user
-    const userIndex = users.findIndex(u => u.id === user.id);
-    if (userIndex !== -1) {
-      users[userIndex] = {
-        ...users[userIndex],
+      // Update user in Supabase
+      const result = await updateUserProfile(user.id, {
         name: formData.name.trim(),
-        email: formData.email.toLowerCase().trim(),
         phone: formData.phone.trim(),
-        tcNumber: formData.tcNumber.trim() || undefined,
-      };
-      localStorage.setItem('randevudent_users', JSON.stringify(users));
-      
-      // Update current user
-      const updatedUser = users[userIndex];
-      localStorage.setItem('randevudent_current_user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-      
-      setIsEditing(false);
-      showToastMessage('Profil bilgileri başarıyla güncellendi', 'success');
+        tc_number: formData.tc_number.trim() || undefined,
+      });
+
+      if (result.success && result.user) {
+        setUser(result.user);
+        setIsEditing(false);
+        showToastMessage('Profil bilgileri başarıyla güncellendi', 'success');
+      } else {
+        showToastMessage(result.error || 'Profil güncellenemedi', 'error');
+      }
+    } catch (error: any) {
+      showToastMessage(error.message || 'Profil güncellenemedi', 'error');
     }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!user) return;
 
     // Validate
     if (!passwordData.currentPassword) {
       showToastMessage('Mevcut şifre boş bırakılamaz', 'error');
-      return;
-    }
-    if (passwordData.currentPassword !== user.password) {
-      showToastMessage('Mevcut şifre hatalı', 'error');
       return;
     }
     if (!passwordData.newPassword || passwordData.newPassword.length < 6) {
@@ -132,25 +130,36 @@ export default function ProfilePage() {
       return;
     }
 
-    // Update password
-    const users = getAllUsers();
-    const userIndex = users.findIndex(u => u.id === user.id);
-    if (userIndex !== -1) {
-      users[userIndex].password = passwordData.newPassword;
-      localStorage.setItem('randevudent_users', JSON.stringify(users));
-      
-      // Update current user
-      const updatedUser = { ...users[userIndex] };
-      localStorage.setItem('randevudent_current_user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-      
+    try {
+      // Verify current password by attempting login
+      const loginResult = await loginUser(user.email, passwordData.currentPassword);
+      if (!loginResult.success) {
+        showToastMessage('Mevcut şifre hatalı', 'error');
+        return;
+      }
+
+      // Update password using Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: passwordData.newPassword,
+      });
+
+      if (error) {
+        console.error('Error updating password:', error);
+        showToastMessage(error.message || 'Şifre güncellenemedi', 'error');
+        return;
+      }
+
+      // Success
       setPasswordData({
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       });
       setIsChangingPassword(false);
-      showToastMessage('Şifre başarıyla değiştirildi', 'success');
+      showToastMessage('Şifre başarıyla güncellendi', 'success');
+    } catch (error: any) {
+      console.error('Error in password change:', error);
+      showToastMessage(error.message || 'Şifre güncellenemedi', 'error');
     }
   };
 
@@ -160,7 +169,7 @@ export default function ProfilePage() {
         name: user.name,
         email: user.email,
         phone: user.phone,
-        tcNumber: user.tcNumber || '',
+        tc_number: user.tc_number || '',
       });
     }
     setIsEditing(false);
@@ -255,8 +264,8 @@ export default function ProfilePage() {
                   </label>
                   <input
                     type="text"
-                    value={formData.tcNumber}
-                    onChange={(e) => setFormData({ ...formData, tcNumber: e.target.value })}
+                    value={formData.tc_number}
+                    onChange={(e) => setFormData({ ...formData, tc_number: e.target.value })}
                     className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
                     placeholder="TC Kimlik No"
                     maxLength={11}
@@ -295,7 +304,7 @@ export default function ProfilePage() {
                   <div className="flex-1">
                     <p className="text-xs text-slate-400 font-light mb-1">E-posta</p>
                     <p className="text-sm font-light">{user.email}</p>
-                    {user.emailVerified && (
+                    {user.email_verified && (
                       <span className="inline-flex items-center gap-1 mt-1 text-xs text-green-400">
                         <CheckCircle2 size={12} />
                         Doğrulanmış
@@ -312,12 +321,12 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {user.tcNumber && (
+                {user.tc_number && (
                   <div className="flex items-center gap-3 py-3">
                     <CreditCard size={20} className="text-slate-400" />
                     <div className="flex-1">
                       <p className="text-xs text-slate-400 font-light mb-1">TC Kimlik No</p>
-                      <p className="text-sm font-light">{user.tcNumber}</p>
+                      <p className="text-sm font-light">{user.tc_number}</p>
                     </div>
                   </div>
                 )}

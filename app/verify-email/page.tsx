@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Mail, CheckCircle2, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function VerifyEmailPage() {
   const [email, setEmail] = useState('');
@@ -34,19 +35,34 @@ export default function VerifyEmailPage() {
     if (!email || countdown > 0) return;
 
     setIsResending(true);
-    // TODO: API call to resend verification email
-    console.log('Resending verification email to:', email);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Use Supabase Auth to resend confirmation email
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+      });
+
       setIsResending(false);
+      
+      if (error) {
+        console.error('Error resending verification email:', error);
+        // Still show success to user (security best practice)
+      }
+      
       setResendSuccess(true);
       setCountdown(60); // 60 second cooldown
       
       setTimeout(() => {
         setResendSuccess(false);
       }, 3000);
-    }, 1000);
+    } catch (error: any) {
+      setIsResending(false);
+      console.error('Error resending verification email:', error);
+      // Still show success to user (security best practice)
+      setResendSuccess(true);
+      setCountdown(60);
+    }
   };
 
   return (

@@ -189,8 +189,11 @@ export default function DoctorDetailPage() {
   const doctor = mockDoctors[doctorId];
 
   useEffect(() => {
-    const user = getCurrentUser();
-    setIsAuthenticated(!!user);
+    const checkAuth = async () => {
+      const user = await getCurrentUser();
+      setIsAuthenticated(!!user);
+    };
+    checkAuth();
   }, []);
 
   if (!doctor) {

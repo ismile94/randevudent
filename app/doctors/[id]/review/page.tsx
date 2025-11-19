@@ -25,12 +25,15 @@ function DoctorReviewPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-    setUser(currentUser);
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(currentUser);
+    };
+    checkAuth();
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
