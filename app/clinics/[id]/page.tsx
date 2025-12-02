@@ -6,7 +6,7 @@ import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
 import { isFavorited, toggleFavorite } from '@/lib/favorites';
-import { getAllClinics } from '@/lib/auth-clinic';
+import { getAllClinics, getCurrentClinic } from '@/lib/auth-clinic';
 import { getClinicStaff } from '@/lib/staff';
 import { subscribeToEvents } from '@/lib/events';
 import { getClinicReviews, calculateAverageRating, type Review } from '@/lib/reviews';
@@ -453,32 +453,7 @@ const mockClinic: Clinic = {
     'Estetik Diş Hekimliği / Gülüş Tasarımı',
     'İmplantoloji',
   ],
-  doctors: [
-    {
-      id: '1',
-      name: 'Dr. Ahmet Yılmaz',
-      specialty: 'Ortodonti',
-      services: ['Metal–Seramik Teller', 'Şeffaf Plak/Invisalign', 'Çocuk Ortodontisi'],
-      rating: 4.9,
-      reviewCount: 45,
-    },
-    {
-      id: '2',
-      name: 'Dr. Ayşe Demir',
-      specialty: 'Estetik Diş Hekimliği / Gülüş Tasarımı',
-      services: ['Hollywood Smile', 'Diş Beyazlatma (Ofis–Ev Tipi)', 'E-max Porselen / Laminate Veneer'],
-      rating: 4.7,
-      reviewCount: 38,
-    },
-    {
-      id: '3',
-      name: 'Dr. Mehmet Kaya',
-      specialty: 'İmplantoloji',
-      services: ['Tek İmplant', 'All-on-4 / All-on-6 Sabit Protez', 'Kemik Artırma (GBR – Greftleme)'],
-      rating: 4.8,
-      reviewCount: 52,
-    },
-  ],
+  doctors: [], // Mock doctors removed - only real staff data will be shown
   workingHours: [
     { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
     { day: 'Salı', open: '09:00', close: '18:00', closed: false },
@@ -513,9 +488,17 @@ export default function ClinicDetailPage() {
     const clinicId = params.id as string;
     setLoading(true);
     
-    // Get clinic data
+    // Get clinic data - check both getAllClinics and getCurrentClinic (for test clinic)
     const clinics = getAllClinics();
-    const foundClinic = clinics.find(c => c.id === clinicId);
+    let foundClinic = clinics.find(c => c.id === clinicId);
+    
+    // If not found in clinics array, check current clinic (for test clinic login)
+    if (!foundClinic) {
+      const currentClinic = getCurrentClinic();
+      if (currentClinic && currentClinic.id === clinicId) {
+        foundClinic = currentClinic;
+      }
+    }
     
     // Get real reviews
     const clinicReviews = getClinicReviews(clinicId);
@@ -528,17 +511,19 @@ export default function ClinicDetailPage() {
     // Get nearby clinics (same city)
     if (foundClinic) {
       const nearby = clinics
-        .filter(c => c.id !== clinicId && c.city === foundClinic.city && c.status === 'approved')
+        .filter(c => c.id !== clinicId && c.city === foundClinic!.city && c.status === 'approved')
         .slice(0, 3);
       setNearbyClinics(nearby);
     }
+    
+    // Always get real staff data for the clinic
+    const staff = getClinicStaff(clinicId);
     
     if (foundClinic) {
       // Calculate real rating from reviews
       const avgRating = clinicReviews.length > 0 ? calculateAverageRating(clinicReviews) : 0;
       
       // Collect services and specialties from staff
-      const staff = getClinicStaff(clinicId);
       const allServices = new Set<string>();
       const allSpecialties = new Set<string>();
       
@@ -610,46 +595,39 @@ export default function ClinicDetailPage() {
         });
       setDoctors(doctorsData);
     } else {
-      // Fallback to mock data if clinic not found (for test clinic with id 'clinic-1')
-      if (clinicId === 'clinic-1' || clinicId === '1') {
-        // Try to get staff for test clinic
-        const staff = getClinicStaff('clinic-1');
-        if (staff.length > 0) {
-          const doctorsData: Doctor[] = staff
-            .filter(s => {
-              const titleLower = s.title.toLowerCase();
-              return (
-                titleLower.includes('hekim') ||
-                titleLower.includes('doktor') ||
-                titleLower.includes('dr') ||
-                titleLower.includes('diş hekimi') ||
-                s.specialty
-              );
-            })
-            .map(s => {
-              const doctorReviews = clinicReviews.filter(r => r.doctorId === s.id);
-              const doctorRating = doctorReviews.length > 0 ? calculateAverageRating(doctorReviews) : 0;
-              return {
-                id: s.id,
-                name: s.name,
-                specialty: s.specialty || s.title,
-                services: s.services || [],
-                rating: doctorRating || 0,
-                reviewCount: doctorReviews.length,
-              };
-            });
-          setDoctors(doctorsData.length > 0 ? doctorsData : mockClinic.doctors || []);
-        } else {
-          setDoctors(mockClinic.doctors || []);
-        }
-      } else {
-        setDoctors(mockClinic.doctors || []);
-      }
-      const avgRating = clinicReviews.length > 0 ? calculateAverageRating(clinicReviews) : mockClinic.rating;
+      // Clinic not found - use mock data for display but ALWAYS use real staff
+      // Get real doctors from staff - never use mock doctors
+      const doctorsData: Doctor[] = staff
+        .filter(s => {
+          const titleLower = s.title.toLowerCase();
+          return (
+            titleLower.includes('hekim') ||
+            titleLower.includes('doktor') ||
+            titleLower.includes('dr') ||
+            titleLower.includes('diş hekimi') ||
+            s.specialty
+          );
+        })
+        .map(s => {
+          const doctorReviews = clinicReviews.filter(r => r.doctorId === s.id);
+          const doctorRating = doctorReviews.length > 0 ? calculateAverageRating(doctorReviews) : 0;
+          return {
+            id: s.id,
+            name: s.name,
+            specialty: s.specialty || s.title,
+            services: s.services || [],
+            rating: doctorRating || 0,
+            reviewCount: doctorReviews.length,
+          };
+        });
+      setDoctors(doctorsData); // Always use real staff, never mock
+      
+      const avgRating = clinicReviews.length > 0 ? calculateAverageRating(clinicReviews) : 0;
       setClinic({
         ...mockClinic,
         rating: avgRating,
         reviewCount: clinicReviews.length,
+        doctors: [], // Never use mock doctors - always empty
       });
     }
     

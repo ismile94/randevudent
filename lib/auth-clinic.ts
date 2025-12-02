@@ -76,11 +76,22 @@ export interface Clinic {
 const CLINICS_STORAGE_KEY = 'randevudent_clinics';
 const CURRENT_CLINIC_KEY = 'randevudent_current_clinic';
 
-// Get all clinics from localStorage
+// Get all clinics from localStorage (includes current clinic if logged in)
 export function getAllClinics(): Clinic[] {
   if (typeof window === 'undefined') return [];
   const clinicsJson = localStorage.getItem(CLINICS_STORAGE_KEY);
-  return clinicsJson ? JSON.parse(clinicsJson) : [];
+  const clinics: Clinic[] = clinicsJson ? JSON.parse(clinicsJson) : [];
+  
+  // Also include current clinic if logged in (for test clinic support)
+  const currentClinic = getCurrentClinic();
+  if (currentClinic) {
+    const exists = clinics.find(c => c.id === currentClinic.id);
+    if (!exists) {
+      clinics.push(currentClinic);
+    }
+  }
+  
+  return clinics;
 }
 
 // Register a new clinic (Structure only)
