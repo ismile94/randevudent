@@ -86,11 +86,14 @@ export function updateReview(reviewId: string, updates: Partial<Review>): { succ
 // Delete a review
 export function deleteReview(reviewId: string): { success: boolean; error?: string } {
   const reviews = getAllReviews();
-  const filteredReviews = reviews.filter(r => r.id !== reviewId);
+  const reviewIndex = reviews.findIndex(r => r.id === reviewId);
   
-  if (filteredReviews.length === reviews.length) {
+  if (reviewIndex === -1) {
     return { success: false, error: 'Yorum bulunamadı' };
   }
+  
+  const deletedReview = reviews[reviewIndex];
+  const filteredReviews = reviews.filter(r => r.id !== reviewId);
   
   localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(filteredReviews));
   
