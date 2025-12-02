@@ -37,6 +37,7 @@ export default function ClinicStaffPage() {
     tcNumber: '',
     licenseNumber: '',
     notes: '',
+    services: [] as string[],
   });
 
   const loadData = () => {
@@ -81,6 +82,7 @@ export default function ClinicStaffPage() {
       tcNumber: '',
       licenseNumber: '',
       notes: '',
+      services: [],
     });
     setShowAddModal(true);
   };
@@ -96,6 +98,7 @@ export default function ClinicStaffPage() {
       tcNumber: staffMember.tcNumber || '',
       licenseNumber: staffMember.licenseNumber || '',
       notes: staffMember.notes || '',
+      services: staffMember.services || [],
     });
     setShowAddModal(true);
   };
@@ -138,6 +141,7 @@ export default function ClinicStaffPage() {
           tcNumber: '',
           licenseNumber: '',
           notes: '',
+          services: [],
         });
       } else {
         alert(result.error || 'Ekleme başarısız oldu');
@@ -282,6 +286,26 @@ export default function ClinicStaffPage() {
                         Lisans: {staffMember.licenseNumber}
                       </div>
                     )}
+                    {staffMember.services && staffMember.services.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/50">
+                        <p className="text-xs text-slate-400 font-light mb-2">Hizmetler:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {staffMember.services.slice(0, 3).map((service) => (
+                            <span
+                              key={service}
+                              className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded font-light"
+                            >
+                              {service}
+                            </span>
+                          ))}
+                          {staffMember.services.length > 3 && (
+                            <span className="text-xs px-2 py-1 bg-slate-700/50 text-slate-400 rounded font-light">
+                              +{staffMember.services.length - 3} daha
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -386,6 +410,66 @@ export default function ClinicStaffPage() {
                       className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
                       placeholder="Hekimler için"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-light text-slate-300 mb-2">
+                      Sunduğu Hizmetler (Hekimler için)
+                    </label>
+                    <div className="max-h-64 overflow-y-auto border border-slate-600/50 rounded-lg p-3 bg-slate-800/30">
+                      {[
+                        'Diş Taşı Temizliği (Detartraj)',
+                        'Kompozit Dolgu',
+                        'Tek Kök / Çok Kök Kanal',
+                        'Tek İmplant',
+                        'Metal–Seramik Teller',
+                        'Zirkonyum Kron/Bridge',
+                        'Hollywood Smile',
+                        'Şeffaf Plak/Invisalign',
+                        'Çocuk Ortodontisi',
+                        'Diş Beyazlatma (Ofis–Ev Tipi)',
+                        'E-max Porselen / Laminate Veneer',
+                        'All-on-4 / All-on-6 Sabit Protez',
+                        'Kemik Artırma (GBR – Greftleme)',
+                        'Mikroskop Destekli Kanal',
+                        'Kanal Yenileme (Retreatment)',
+                        'Kırık Diş Onarımı',
+                        'Basit / Komplike Diş Çekimi',
+                        'Gömülü 20\'lik Çekimi',
+                        'Çocuk Dolguları',
+                        'Çocuk Kanal Tedavisi (Pulpotomi/Pulpektomi)',
+                        'Tam/Parsiyel Protez',
+                        'Diş Eti Şekillendirme (Gingivoplasti)',
+                      ].map((service) => (
+                        <label
+                          key={service}
+                          className="flex items-center gap-2 p-2 hover:bg-slate-700/30 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.services.includes(service)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  services: [...formData.services, service],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  services: formData.services.filter((s) => s !== service),
+                                });
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-light text-slate-300">{service}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400 font-light mt-2">
+                      Bu hekimin sunduğu hizmetleri seçin. Bu hizmetler klinik sayfasında ve randevu alma sayfasında görünecektir.
+                    </p>
                   </div>
 
                   <div>
