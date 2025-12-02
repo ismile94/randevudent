@@ -200,62 +200,70 @@ function BookAppointmentPageContent() {
 
   useEffect(() => {
     const loadClinicData = () => {
-      // Get clinic data
-      const clinics = getAllClinics();
-      let foundClinic = clinics.find(c => c.id === clinicId);
-      
-      // If not found, check current clinic (for test clinic)
-      if (!foundClinic) {
-        const currentClinic = getCurrentClinic();
-        if (currentClinic && currentClinic.id === clinicId) {
-          foundClinic = currentClinic;
-        }
-      }
-      
-      if (foundClinic) {
-        // Get real staff and filter for doctors only
-        const staff = getClinicStaff(clinicId);
-        const doctorsData = staff
-          .filter(isDoctor)
-          .map(s => ({
-            id: s.id,
-            name: s.name,
-            specialty: s.specialty || s.title,
-            services: s.services || [],
-          }));
+      try {
+        // Get clinic data
+        const clinics = getAllClinics();
+        let foundClinic = clinics.find(c => c.id === clinicId);
         
-        setDoctors(doctorsData);
-        
-        // Collect all services from staff
-        const allServices = new Set<string>();
-        staff.forEach(s => {
-          if (s.services) {
-            s.services.forEach((service: string) => allServices.add(service));
+        // If not found, check current clinic (for test clinic)
+        if (!foundClinic) {
+          const currentClinic = getCurrentClinic();
+          if (currentClinic && currentClinic.id === clinicId) {
+            foundClinic = currentClinic;
           }
-        });
+        }
         
-        setClinic({
-          id: foundClinic.id,
-          name: foundClinic.clinicName,
-          address: foundClinic.address,
-          city: foundClinic.city,
-          district: foundClinic.district,
-          phone: foundClinic.phone,
-          email: foundClinic.email,
-          services: Array.from(allServices),
-          doctors: doctorsData,
-          workingHours: foundClinic.workingHours || [
-            { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-            { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-            { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-            { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-            { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-            { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-            { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-          ],
-        });
+        if (foundClinic) {
+          // Get real staff and filter for doctors only
+          const staff = getClinicStaff(clinicId);
+          const doctorsData = staff
+            .filter(isDoctor)
+            .map(s => ({
+              id: s.id,
+              name: s.name,
+              specialty: s.specialty || s.title,
+              services: s.services || [],
+            }));
+          
+          setDoctors(doctorsData);
+          
+          // Collect all services from staff
+          const allServices = new Set<string>();
+          staff.forEach(s => {
+            if (s.services) {
+              s.services.forEach((service: string) => allServices.add(service));
+            }
+          });
+          
+          setClinic({
+            id: foundClinic.id,
+            name: foundClinic.clinicName,
+            address: foundClinic.address,
+            city: foundClinic.city,
+            district: foundClinic.district,
+            phone: foundClinic.phone,
+            email: foundClinic.email,
+            services: Array.from(allServices),
+            doctors: doctorsData,
+            workingHours: foundClinic.workingHours || [
+              { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+              { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+              { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+              { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+              { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+              { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+              { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+            ],
+          });
+        } else {
+          // Clinic not found - show error
+          console.error('Clinic not found:', clinicId);
+        }
+      } catch (error) {
+        console.error('Error loading clinic data:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     
     loadClinicData();
@@ -305,12 +313,37 @@ function BookAppointmentPageContent() {
     }
   }, [formData.date, formData.doctorId, clinic?.workingHours, formData.time]);
 
-  if (!user || loading || !clinic) {
+  if (!user) {
+    return null; // Will redirect
+  }
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
           <p className="text-slate-400 font-light">Yükleniyor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!clinic) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-light mb-2">Klinik Bulunamadı</h1>
+          <p className="text-slate-400 font-light mb-6">
+            Seçtiğiniz klinik bulunamadı veya erişilemiyor.
+          </p>
+          <Link
+            href="/clinics"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg transition font-light"
+          >
+            <ArrowLeft size={16} />
+            Klinikler Sayfasına Dön
+          </Link>
         </div>
       </div>
     );
