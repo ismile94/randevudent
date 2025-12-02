@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
-import { getCurrentClinic } from '@/lib/auth-clinic';
+import { getCurrentClinic, updateClinicSettings } from '@/lib/auth-clinic';
+import { subscribeToEvents } from '@/lib/events';
 import {
   Settings,
   Building2,
@@ -33,7 +34,7 @@ export default function ClinicSettingsPage() {
     postalCode: '',
   });
 
-  useEffect(() => {
+  const loadData = () => {
     const currentClinic = getCurrentClinic();
     if (!currentClinic) {
       router.push('/clinic/login');
@@ -50,12 +51,36 @@ export default function ClinicSettingsPage() {
       city: currentClinic.city || '',
       postalCode: currentClinic.postalCode || '',
     });
+  };
+
+  useEffect(() => {
+    loadData();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToEvents((eventData) => {
+      if (eventData.type === 'clinic:settings:updated') {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [router]);
 
   const handleSave = () => {
-    // TODO: Implement save settings
-    console.log('Save settings:', formData);
-    setIsEditing(false);
+    if (!clinic) return;
+
+    const result = updateClinicSettings(clinic.id, formData);
+    if (result.success) {
+      setIsEditing(false);
+      if (result.clinic) {
+        setClinic(result.clinic);
+      }
+      alert('Ayarlar başarıyla kaydedildi');
+    } else {
+      alert(result.error || 'Kaydetme başarısız oldu');
+    }
   };
 
   if (!clinic) {

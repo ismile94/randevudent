@@ -157,6 +157,7 @@ function getAllAppointments(): Appointment[] {
   return appointmentsJson ? JSON.parse(appointmentsJson) : [];
 }
 
+// This function is kept for backward compatibility but should use createAppointment from lib/appointments.ts
 function saveAppointment(appointment: Appointment): void {
   if (typeof window === 'undefined') return;
   const appointments = getAllAppointments();
@@ -399,24 +400,31 @@ function BookAppointmentPageContent() {
       createdAt: new Date().toISOString(),
     };
 
-    setTimeout(() => {
-      saveAppointment(newAppointment);
+    setTimeout(async () => {
+      // Use the new appointment management system
+      const { createAppointment } = await import('@/lib/appointments');
+      const { createOrUpdatePatientFromAppointment } = await import('@/lib/patients');
       
-      // TODO: Create or update patient record for clinic
-      // This will automatically save patient information to clinic's patient database
-      // import { createOrUpdatePatientFromAppointment } from '@/lib/patients';
-      // createOrUpdatePatientFromAppointment(clinic.id, user.id, {
-      //   patientName: user.name,
-      //   patientPhone: user.phone,
-      //   patientEmail: user.email,
-      //   appointmentDate: formData.date,
-      // });
+      const result = createAppointment(newAppointment);
       
-      setIsSubmitting(false);
-      showToast('Randevunuz başarıyla oluşturuldu!', 'success');
-      setTimeout(() => {
-        router.push('/appointments');
-      }, 1500);
+      if (result.success) {
+        // Create or update patient record for clinic
+        createOrUpdatePatientFromAppointment(clinic.id, user.id, {
+          patientName: user.name,
+          patientPhone: user.phone,
+          patientEmail: user.email,
+          appointmentDate: formData.date,
+        });
+        
+        setIsSubmitting(false);
+        showToast('Randevunuz başarıyla oluşturuldu!', 'success');
+        setTimeout(() => {
+          router.push('/appointments');
+        }, 1500);
+      } else {
+        setIsSubmitting(false);
+        showToast(result.error || 'Randevu oluşturulamadı', 'error');
+      }
     }, 500);
   };
 

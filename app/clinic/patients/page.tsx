@@ -6,6 +6,7 @@ import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
 import { getCurrentClinic } from '@/lib/auth-clinic';
 import { getClinicPatients } from '@/lib/patients';
+import { subscribeToEvents } from '@/lib/events';
 import {
   Users,
   Search,
@@ -26,7 +27,7 @@ export default function ClinicPatientsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterDate, setFilterDate] = useState<'all' | 'recent' | 'old'>('all');
 
-  useEffect(() => {
+  const loadData = () => {
     const currentClinic = getCurrentClinic();
     if (!currentClinic) {
       router.push('/clinic/login');
@@ -34,10 +35,28 @@ export default function ClinicPatientsPage() {
     }
     setClinic(currentClinic);
     
-    // TODO: Fetch patients from API
-    // For now, get from localStorage structure
     const clinicPatients = getClinicPatients(currentClinic.id);
     setPatients(clinicPatients);
+  };
+
+  useEffect(() => {
+    loadData();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToEvents((eventData) => {
+      if (
+        eventData.type === 'patient:created' ||
+        eventData.type === 'patient:updated' ||
+        eventData.type === 'appointment:created' ||
+        eventData.type === 'appointment:updated'
+      ) {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [router]);
 
   const filteredPatients = patients.filter(patient => {

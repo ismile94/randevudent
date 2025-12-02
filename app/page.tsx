@@ -49,51 +49,17 @@ export default function RandevuDent() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Mobilde mousemove efektini devre dışı bırak
-    const checkMobile = () => {
-      return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
-             (typeof window !== 'undefined' && window.innerWidth < 768);
-    };
-    
-    const isMobile = checkMobile();
-    
-    if (isMobile) {
-      // Mobilde sabit merkez pozisyonu
-      setMousePos({ x: 0.5, y: 0.5 });
-      return;
-    }
-
-    let rafId: number | null = null;
-    let lastUpdate = 0;
-    const throttleMs = 50; // 50ms throttle - 20 FPS max
-
     const handleMouseMove = (e: MouseEvent) => {
-      const now = Date.now();
-      if (now - lastUpdate < throttleMs) return;
-      lastUpdate = now;
-
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
-
-      rafId = requestAnimationFrame(() => {
-        if (containerRef.current) {
-          const rect = containerRef.current.getBoundingClientRect();
-          const x = (e.clientX - rect.left) / rect.width;
-          const y = (e.clientY - rect.top) / rect.height;
-          setMousePos({ x, y });
-        }
-        rafId = null;
-      });
-    };
-
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        setMousePos({ x, y });
       }
     };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -119,14 +85,14 @@ export default function RandevuDent() {
               transparent 50%
             ),
             linear-gradient(135deg, #1a2140 0%, #16213e 50%, #0f3460 100%)
-          `
+          `,
+          transition: 'background 100ms ease-out'
         }}
       >
         {/* Metalik accent lines */}
         <div className="absolute inset-0 overflow-hidden">
-          {/* Mobilde blur efektlerini kaldır */}
-          <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full md:blur-xl blur-none opacity-30" />
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-tl from-cyan-500/20 to-transparent rounded-full md:blur-xl blur-none opacity-30" />
+          <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-3xl opacity-30" />
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-tl from-cyan-500/20 to-transparent rounded-full blur-3xl opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-500/5 to-transparent" />
         </div>
 
@@ -148,7 +114,7 @@ export default function RandevuDent() {
 
             {/* Search Box */}
             <div className="max-w-2xl mx-auto mb-12">
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-2 flex flex-col md:flex-row gap-2">
+              <div className="bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl p-2 flex flex-col md:flex-row gap-2">
                 <div className="flex-1 flex items-center gap-3 px-4 py-3">
                   <MapPin size={20} className="text-slate-400" />
                   <input
@@ -228,7 +194,7 @@ export default function RandevuDent() {
               return (
                 <div
                   key={idx}
-                  className="group bg-slate-800/40 border border-slate-700/30 hover:border-blue-500/50 rounded-xl p-6 transition duration-300 hover:bg-slate-800/50"
+                  className="group bg-slate-800/30 backdrop-blur border border-slate-700/30 hover:border-blue-500/50 rounded-xl p-6 transition duration-300 hover:bg-slate-800/50"
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-lg flex items-center justify-center mb-4 group-hover:from-blue-500/30 group-hover:to-cyan-500/30 transition">
                     <Icon size={24} className="text-blue-400" />
@@ -242,7 +208,7 @@ export default function RandevuDent() {
 
           {/* CTA Section */}
           <div className="mt-24 text-center">
-            <div className="inline-block bg-slate-800/50 border border-slate-700/50 rounded-xl px-8 py-6">
+            <div className="inline-block bg-slate-800/40 backdrop-blur border border-slate-700/50 rounded-xl px-8 py-6">
               <p className="text-slate-300 font-light mb-4">Klinik sahibi misiniz?</p>
               <Link href="/clinic-register">
                 <button className="px-6 py-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg font-light transition flex items-center gap-2 mx-auto">

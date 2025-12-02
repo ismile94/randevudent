@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
+import { getAppointmentsByUserId } from '@/lib/appointments';
+import { subscribeToEvents } from '@/lib/events';
 import {
   Calendar,
   Clock,
@@ -57,6 +59,14 @@ export default function AppointmentsPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'confirmed' | 'cancelled' | 'completed'>('all');
   const [filterDate, setFilterDate] = useState<'all' | 'upcoming' | 'past'>('all');
 
+  const loadAppointments = async (currentUser: any) => {
+    if (!currentUser) return;
+    
+    // Get user's appointments
+    const userAppointments = getAppointmentsByUserId(currentUser.id);
+    setAppointments(userAppointments);
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const currentUser = await getCurrentUser();
@@ -65,47 +75,38 @@ export default function AppointmentsPage() {
         return;
       }
       setUser(currentUser);
-      
-      // Get user's appointments
-      const allAppointments = getAllAppointments();
-      let userAppointments = allAppointments
-        .filter(apt => apt.userId === currentUser.id)
-      .sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB.getTime() - dateA.getTime();
-        });
-      
-      // Apply filters
-      if (filterStatus !== 'all') {
-        userAppointments = userAppointments.filter(apt => apt.status === filterStatus);
-      }
-      
-      if (filterDate !== 'all') {
-        const now = new Date();
-        userAppointments = userAppointments.filter(apt => {
-          const appointmentDate = new Date(`${apt.date}T${apt.time}`);
-          return filterDate === 'upcoming' ? appointmentDate >= now : appointmentDate < now;
-        });
-      }
-      
-      setAppointments(userAppointments);
+      loadAppointments(currentUser);
     };
-    checkAuth();
-  }, [router, filterStatus, filterDate]);
 
-  const handleCancelAppointment = (appointmentId: string) => {
+    checkAuth();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToEvents((eventData) => {
+      if (
+        eventData.type === 'appointment:created' ||
+        eventData.type === 'appointment:updated' ||
+        eventData.type === 'appointment:deleted'
+      ) {
+        if (user) {
+          loadAppointments(user);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [router, filterStatus, filterDate, user]);
+
+  const handleCancelAppointment = async (appointmentId: string) => {
     if (confirm('Randevuyu iptal etmek istediğinize emin misiniz?')) {
-      updateAppointmentStatus(appointmentId, 'cancelled');
-      const allAppointments = getAllAppointments();
-      const userAppointments = allAppointments
-        .filter(apt => apt.userId === user.id)
-        .sort((a, b) => {
-          const dateA = new Date(`${a.date}T${a.time}`);
-          const dateB = new Date(`${b.date}T${b.time}`);
-          return dateB.getTime() - dateA.getTime();
-        });
-      setAppointments(userAppointments);
+      const { updateAppointmentStatus } = await import('@/lib/appointments');
+      const result = updateAppointmentStatus(appointmentId, 'cancelled');
+      if (result.success && user) {
+        loadAppointments(user);
+      } else {
+        alert(result.error || 'İptal işlemi başarısız oldu');
+      }
     }
   };
 

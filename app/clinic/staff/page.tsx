@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
 import { getCurrentClinic } from '@/lib/auth-clinic';
+import { getClinicStaff, createStaff, updateStaff, deleteStaff, type Staff } from '@/lib/staff';
+import { subscribeToEvents } from '@/lib/events';
 import {
   Users,
   UserPlus,
@@ -12,15 +14,32 @@ import {
   Trash2,
   Search,
   Plus,
+  X,
+  Save,
+  Phone,
+  Mail,
+  Briefcase,
 } from 'lucide-react';
 
 export default function ClinicStaffPage() {
   const router = useRouter();
   const [clinic, setClinic] = useState<any>(null);
-  const [staff, setStaff] = useState<any[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    title: '',
+    specialty: '',
+    phone: '',
+    email: '',
+    tcNumber: '',
+    licenseNumber: '',
+    notes: '',
+  });
 
-  useEffect(() => {
+  const loadData = () => {
     const currentClinic = getCurrentClinic();
     if (!currentClinic) {
       router.push('/clinic/login');
@@ -28,24 +47,115 @@ export default function ClinicStaffPage() {
     }
     setClinic(currentClinic);
     
-    // TODO: Fetch staff from API
-    setStaff([]);
+    const clinicStaff = getClinicStaff(currentClinic.id);
+    setStaff(clinicStaff);
+  };
+
+  useEffect(() => {
+    loadData();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToEvents((eventData) => {
+      if (
+        eventData.type === 'staff:created' ||
+        eventData.type === 'staff:updated' ||
+        eventData.type === 'staff:deleted'
+      ) {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [router]);
 
   const handleAddStaff = () => {
-    // TODO: Implement add staff
-    console.log('Add staff');
+    setEditingStaff(null);
+    setFormData({
+      name: '',
+      title: '',
+      specialty: '',
+      phone: '',
+      email: '',
+      tcNumber: '',
+      licenseNumber: '',
+      notes: '',
+    });
+    setShowAddModal(true);
   };
 
-  const handleEditStaff = (staffId: string) => {
-    // TODO: Implement edit staff
-    console.log('Edit staff:', staffId);
+  const handleEditStaff = (staffMember: Staff) => {
+    setEditingStaff(staffMember);
+    setFormData({
+      name: staffMember.name,
+      title: staffMember.title,
+      specialty: staffMember.specialty || '',
+      phone: staffMember.phone || '',
+      email: staffMember.email || '',
+      tcNumber: staffMember.tcNumber || '',
+      licenseNumber: staffMember.licenseNumber || '',
+      notes: staffMember.notes || '',
+    });
+    setShowAddModal(true);
   };
 
   const handleDeleteStaff = (staffId: string) => {
-    // TODO: Implement delete staff
-    console.log('Delete staff:', staffId);
+    if (confirm('Bu personeli silmek istediğinize emin misiniz?')) {
+      const result = deleteStaff(staffId);
+      if (!result.success) {
+        alert(result.error || 'Silme işlemi başarısız oldu');
+      }
+    }
   };
+
+  const handleSaveStaff = () => {
+    if (!clinic) return;
+
+    if (!formData.name || !formData.title) {
+      alert('Lütfen ad ve unvan alanlarını doldurun');
+      return;
+    }
+
+    if (editingStaff) {
+      const result = updateStaff(editingStaff.id, formData);
+      if (result.success) {
+        setShowAddModal(false);
+        setEditingStaff(null);
+      } else {
+        alert(result.error || 'Güncelleme başarısız oldu');
+      }
+    } else {
+      const result = createStaff(clinic.id, formData);
+      if (result.success) {
+        setShowAddModal(false);
+        setFormData({
+          name: '',
+          title: '',
+          specialty: '',
+          phone: '',
+          email: '',
+          tcNumber: '',
+          licenseNumber: '',
+          notes: '',
+        });
+      } else {
+        alert(result.error || 'Ekleme başarısız oldu');
+      }
+    }
+  };
+
+  const filteredStaff = staff.filter(s => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        s.name.toLowerCase().includes(query) ||
+        s.title.toLowerCase().includes(query) ||
+        (s.specialty && s.specialty.toLowerCase().includes(query))
+      );
+    }
+    return true;
+  });
 
   if (!clinic) {
     return null; // Will redirect
@@ -95,23 +205,222 @@ export default function ClinicStaffPage() {
           </div>
 
           {/* Staff List */}
-          {staff.length === 0 ? (
+          {filteredStaff.length === 0 ? (
             <div className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-12 text-center">
               <Users className="mx-auto mb-4 text-slate-500" size={48} />
-              <h2 className="text-xl font-light mb-2">Henüz kadro üyesi yok</h2>
+              <h2 className="text-xl font-light mb-2">
+                {staff.length === 0 ? 'Henüz kadro üyesi yok' : 'Personel bulunamadı'}
+              </h2>
               <p className="text-slate-400 font-light mb-6">
-                İlk hekim veya personeli ekleyin
+                {staff.length === 0
+                  ? 'İlk hekim veya personeli ekleyin'
+                  : 'Arama kriterlerinize uygun personel bulunamadı'}
               </p>
-              <button
-                onClick={handleAddStaff}
-                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition"
-              >
-                Yeni Ekle
-              </button>
+              {staff.length === 0 && (
+                <button
+                  onClick={handleAddStaff}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition"
+                >
+                  Yeni Ekle
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Staff cards will be rendered here */}
+              {filteredStaff.map((staffMember) => (
+                <div
+                  key={staffMember.id}
+                  className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-6 hover:border-blue-400/50 transition"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <Users size={24} className="text-blue-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-light">{staffMember.name}</h3>
+                        <p className="text-sm text-slate-400 font-light">{staffMember.title}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditStaff(staffMember)}
+                        className="p-2 hover:bg-blue-500/20 rounded-lg transition"
+                      >
+                        <Edit2 size={16} className="text-blue-400" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStaff(staffMember.id)}
+                        className="p-2 hover:bg-red-500/20 rounded-lg transition"
+                      >
+                        <Trash2 size={16} className="text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    {staffMember.specialty && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Briefcase size={14} className="text-slate-400" />
+                        <span className="font-light">{staffMember.specialty}</span>
+                      </div>
+                    )}
+                    {staffMember.phone && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Phone size={14} className="text-slate-400" />
+                        <span className="font-light">{staffMember.phone}</span>
+                      </div>
+                    )}
+                    {staffMember.email && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <Mail size={14} className="text-slate-400" />
+                        <span className="font-light truncate">{staffMember.email}</span>
+                      </div>
+                    )}
+                    {staffMember.licenseNumber && (
+                      <div className="text-xs text-slate-400 font-light">
+                        Lisans: {staffMember.licenseNumber}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add/Edit Modal */}
+          {showAddModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-light">
+                    {editingStaff ? 'Personel Düzenle' : 'Yeni Personel Ekle'}
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setEditingStaff(null);
+                    }}
+                    className="p-2 hover:bg-slate-700 rounded-lg transition"
+                  >
+                    <X size={20} className="text-slate-400" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-light text-slate-300 mb-2">
+                      Ad Soyad *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                      placeholder="Örn: Dr. Ahmet Yılmaz"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-light text-slate-300 mb-2">
+                      Unvan *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                      placeholder="Örn: Diş Hekimi, Hasta Kabul, Asistan"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-light text-slate-300 mb-2">
+                      Uzmanlık Alanı
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specialty}
+                      onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                      placeholder="Örn: Ortodonti, Endodonti"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-light text-slate-300 mb-2">
+                        Telefon
+                      </label>
+                      <input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                        placeholder="0555 123 45 67"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-light text-slate-300 mb-2">
+                        E-posta
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                        placeholder="ornek@email.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-light text-slate-300 mb-2">
+                      Lisans Numarası
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.licenseNumber}
+                      onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                      placeholder="Hekimler için"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-light text-slate-300 mb-2">
+                      Notlar
+                    </label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light resize-none"
+                      placeholder="Ek notlar..."
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={handleSaveStaff}
+                      className="flex-1 px-6 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition flex items-center justify-center gap-2"
+                    >
+                      <Save size={16} />
+                      {editingStaff ? 'Güncelle' : 'Ekle'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddModal(false);
+                        setEditingStaff(null);
+                      }}
+                      className="px-6 py-2.5 border border-slate-600/50 hover:border-red-400/50 hover:text-red-400 rounded-lg transition font-light"
+                    >
+                      İptal
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -1,4 +1,6 @@
-// Clinic authentication utility (Structure only - not functional)
+// Clinic authentication utility with real-time updates
+
+import { dispatchEvent } from './events';
 
 export interface Clinic {
   id: string;
@@ -65,7 +67,74 @@ export function isClinicAuthenticated(): boolean {
 
 // Update clinic status
 export function updateClinicStatus(clinicId: string, status: 'pending' | 'approved' | 'rejected' | 'suspended'): { success: boolean; error?: string } {
-  // TODO: Implementation will be added later
-  return { success: false, error: 'Not implemented yet' };
+  if (typeof window === 'undefined') {
+    return { success: false, error: 'Window is not available' };
+  }
+
+  try {
+    const clinics = getAllClinics();
+    const index = clinics.findIndex(c => c.id === clinicId);
+
+    if (index === -1) {
+      return { success: false, error: 'Clinic not found' };
+    }
+
+    clinics[index].status = status;
+    localStorage.setItem(CLINICS_STORAGE_KEY, JSON.stringify(clinics));
+
+    // If this is the current clinic, update it
+    const currentClinic = getCurrentClinic();
+    if (currentClinic && currentClinic.id === clinicId) {
+      currentClinic.status = status;
+      localStorage.setItem(CURRENT_CLINIC_KEY, JSON.stringify(currentClinic));
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating clinic status:', error);
+    return { success: false, error: error.message || 'Failed to update clinic status' };
+  }
+}
+
+// Update clinic settings
+export function updateClinicSettings(
+  clinicId: string,
+  updates: Partial<Omit<Clinic, 'id' | 'status' | 'createdAt' | 'verified' | 'password'>>
+): { success: boolean; clinic?: Clinic; error?: string } {
+  if (typeof window === 'undefined') {
+    return { success: false, error: 'Window is not available' };
+  }
+
+  try {
+    const clinics = getAllClinics();
+    const index = clinics.findIndex(c => c.id === clinicId);
+
+    if (index === -1) {
+      return { success: false, error: 'Clinic not found' };
+    }
+
+    const updatedClinic: Clinic = {
+      ...clinics[index],
+      ...updates,
+    };
+
+    clinics[index] = updatedClinic;
+    localStorage.setItem(CLINICS_STORAGE_KEY, JSON.stringify(clinics));
+
+    // If this is the current clinic, update it
+    const currentClinic = getCurrentClinic();
+    if (currentClinic && currentClinic.id === clinicId) {
+      Object.assign(currentClinic, updates);
+      localStorage.setItem(CURRENT_CLINIC_KEY, JSON.stringify(currentClinic));
+    }
+
+    // Dispatch event for real-time updates
+    dispatchEvent('clinic:settings:updated', updatedClinic);
+
+    return { success: true, clinic: updatedClinic };
+  } catch (error: any) {
+    console.error('Error updating clinic settings:', error);
+    return { success: false, error: error.message || 'Failed to update clinic settings' };
+  }
 }
 
