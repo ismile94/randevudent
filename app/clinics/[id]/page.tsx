@@ -1,11 +1,14 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
 import { isFavorited, toggleFavorite } from '@/lib/favorites';
+import { getAllClinics } from '@/lib/auth-clinic';
+import { getClinicStaff } from '@/lib/staff';
+import { subscribeToEvents } from '@/lib/events';
 import {
   MapPin,
   Phone,
@@ -433,20 +436,145 @@ export default function ClinicDetailPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [favorited, setFavorited] = useState(false);
+  const [clinic, setClinic] = useState<Clinic | null>(null);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+
+  const loadClinicData = useCallback(() => {
+    const clinicId = params.id as string;
+    
+    // Get clinic data
+    const clinics = getAllClinics();
+    const foundClinic = clinics.find(c => c.id === clinicId);
+    
+    if (foundClinic) {
+      // Use real clinic data
+      const clinicData: Clinic = {
+        id: foundClinic.id,
+        name: foundClinic.clinicName,
+        address: foundClinic.address,
+        city: foundClinic.city,
+        district: foundClinic.district,
+        phone: foundClinic.phone,
+        email: foundClinic.email,
+        website: foundClinic.website,
+        rating: 4.8, // Default, can be calculated from reviews
+        reviewCount: 0, // Default, can be calculated from reviews
+        services: [], // Can be populated from staff services
+        specialties: [], // Can be populated from staff specialties
+        workingHours: mockClinic.workingHours, // Use mock for now, can be added to clinic settings
+        description: mockClinic.description, // Use mock for now, can be added to clinic settings
+        verified: foundClinic.verified,
+      };
+      setClinic(clinicData);
+      
+      // Get staff/doctors - show all staff with medical titles
+      const staff = getClinicStaff(clinicId);
+      const doctorsData: Doctor[] = staff
+        .filter(s => {
+          const titleLower = s.title.toLowerCase();
+          return (
+            titleLower.includes('hekim') ||
+            titleLower.includes('doktor') ||
+            titleLower.includes('dr') ||
+            titleLower.includes('diş hekimi') ||
+            s.specialty // If has specialty, likely a doctor
+          );
+        })
+        .map(s => ({
+          id: s.id,
+          name: s.name,
+          specialty: s.specialty || s.title,
+          services: s.services || [],
+          rating: 4.5, // Default
+          reviewCount: 0, // Default
+        }));
+      setDoctors(doctorsData);
+    } else {
+      // Fallback to mock data if clinic not found (for test clinic with id 'clinic-1')
+      if (clinicId === 'clinic-1' || clinicId === '1') {
+        // Try to get staff for test clinic
+        const staff = getClinicStaff('clinic-1');
+        if (staff.length > 0) {
+          const doctorsData: Doctor[] = staff
+            .filter(s => {
+              const titleLower = s.title.toLowerCase();
+              return (
+                titleLower.includes('hekim') ||
+                titleLower.includes('doktor') ||
+                titleLower.includes('dr') ||
+                titleLower.includes('diş hekimi') ||
+                s.specialty
+              );
+            })
+            .map(s => ({
+              id: s.id,
+              name: s.name,
+              specialty: s.specialty || s.title,
+              services: s.services || [],
+              rating: 4.5,
+              reviewCount: 0,
+            }));
+          setDoctors(doctorsData.length > 0 ? doctorsData : mockClinic.doctors || []);
+        } else {
+          setDoctors(mockClinic.doctors || []);
+        }
+      } else {
+        setDoctors(mockClinic.doctors || []);
+      }
+      setClinic(mockClinic);
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    loadClinicData();
+  }, [loadClinicData]);
 
   useEffect(() => {
     const checkAuth = async () => {
       const currentUser = await getCurrentUser();
       setIsAuthenticated(!!currentUser);
-      if (currentUser) {
+      if (currentUser && clinic) {
         setUser(currentUser);
-        setFavorited(isFavorited(currentUser.id, mockClinic.id));
+        setFavorited(isFavorited(currentUser.id, clinic.id));
       }
     };
-    checkAuth();
-  }, []);
+    if (clinic) {
+      checkAuth();
+    }
+  }, [clinic]);
 
-  const clinic = mockClinic; // Supabase'den gelecek
+  // Subscribe to real-time updates
+  useEffect(() => {
+    const unsubscribe = subscribeToEvents((eventData) => {
+      const clinicId = params.id as string;
+      
+      if (
+        eventData.type === 'staff:created' ||
+        eventData.type === 'staff:updated' ||
+        eventData.type === 'staff:deleted'
+      ) {
+        // Reload clinic data to get updated staff
+        loadClinicData();
+      }
+      
+      if (eventData.type === 'clinic:settings:updated' && eventData.payload.id === clinicId) {
+        // Reload clinic data to get updated settings
+        loadClinicData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [params.id, loadClinicData]);
+
+  if (!clinic) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <p className="text-slate-400">Yükleniyor...</p>
+      </div>
+    );
+  }
 
   const handleBookAppointment = () => {
     if (isAuthenticated) {
@@ -615,14 +743,14 @@ export default function ClinicDetailPage() {
               </div>
 
               {/* Doctors / Kadro */}
-              {clinic.doctors && clinic.doctors.length > 0 && (
+              {doctors && doctors.length > 0 && (
                 <div className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-6">
                   <h2 className="text-xl font-light mb-4 flex items-center gap-2">
                     <User size={24} className="text-blue-400" />
                     Kadro
                   </h2>
                   <div className="grid md:grid-cols-2 gap-4">
-                    {clinic.doctors.map((doctor) => (
+                    {doctors.map((doctor) => (
                       <Link
                         key={doctor.id}
                         href={`/doctors/${doctor.id}`}
