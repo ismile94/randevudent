@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
-import { getCurrentClinic } from '@/lib/auth-clinic';
-import { getClinicStaff, createStaff, updateStaff, deleteStaff, type Staff } from '@/lib/staff';
-import { subscribeToEvents } from '@/lib/events';
+import { getCurrentClinicWithUUID } from '@/lib/utils/clinic-utils';
+import { getClinicStaff, createStaff, updateStaff, deleteStaff } from '@/lib/services/staff-service';
 import {
   Users,
   UserPlus,
@@ -14,152 +13,280 @@ import {
   Trash2,
   Search,
   Plus,
-  X,
-  Save,
-  Phone,
-  Mail,
-  Briefcase,
 } from 'lucide-react';
+import ToastContainer, { showToast } from '@/components/Toast';
+
+// Diş kliniğinde çalışabilecek meslek birimleri
+// Not: Diş hekimliği uzmanlık alanları (Ortodontist, Periodontist vb.) burada değil, uzmanlık kısmında seçilir
+const titleOptions = [
+  'Diş Hekimi',
+  'Diş Hekimi Asistanı',
+  'Hemşire',
+  'Sekreter',
+  'Radyoloji Teknisyeni',
+  'Sterilizasyon Sorumlusu',
+  'Hasta Kabul Sorumlusu',
+  'Muhasebeci',
+  'Temizlik Personeli',
+];
+
+// Diş Hekimliği Uzmanlık Alanları
+const specialtyOptions = [
+  'Ağız, Diş ve Çene Cerrahisi',
+  'Ortodonti',
+  'Protetik Diş Tedavisi',
+  'Endodonti (Kanal Tedavisi)',
+  'Periodontoloji (Diş Eti Hastalıkları)',
+  'Pedodonti (Çocuk Diş Hekimliği)',
+  'Restoratif Diş Tedavisi',
+  'Oral Diagnoz ve Radyoloji',
+  'Estetik Diş Hekimliği / Gülüş Tasarımı',
+  'İmplantoloji',
+  'Dijital Diş Hekimliği – CAD/CAM',
+  'Temporomandibular Eklem (TME) Tedavileri',
+  'Bruksizm (Diş Sıkma ve Gıcırdatma) Tedavileri',
+  'Uyku Apnesi ve Horlama Ağız Apareyleri',
+  'Ağız Kokusu (Halitozis) Yönetimi',
+];
+
+// Diş Kliniği Hizmetleri
+const serviceOptions = [
+  // Koruyucu Tedaviler
+  'Diş Taşı Temizliği (Detartraj)',
+  'Subgingival Derin Temizlik (Küretaj)',
+  'Flor & Fissür Örtücü',
+  'Koruyucu Plaklar',
+  // Dolgu ve Restorasyonlar
+  'Kompozit Dolgu',
+  'Seramik Inlay–Onlay',
+  'Bonding Estetik Dolgu',
+  'Kırık Diş Onarımı',
+  // Kanal Tedavileri
+  'Tek Kök / Çok Kök Kanal',
+  'Kökte Kırık Yönetimi',
+  'Kanal Yenileme (Retreatment)',
+  'Mikroskop Destekli Kanal',
+  // Cerrahi İşlemler
+  'Basit / Komplike Diş Çekimi',
+  'Gömülü 20\'lik Çekimi',
+  'Çene Kist/Tümör Operasyonları',
+  'Sinüs Lifting, Greft, Membran',
+  // İmplant Tedavileri
+  'Tek İmplant',
+  'İmplant Üstü Kron/Bridge',
+  'All-on-4 / All-on-6 Sabit Protez',
+  'Kemik Artırma (GBR – Greftleme)',
+  // Protez / Kaplama
+  'Zirkonyum Kron/Bridge',
+  'E-max Porselen / Laminate Veneer',
+  'Tam/Parsiyel Protez',
+  'İmplant Üstü Hibrit Protez',
+  // Ortodonti
+  'Metal–Seramik Teller',
+  'Şeffaf Plak/Invisalign',
+  'Çocuk Ortodontisi',
+  'Çene Genişletme Apareyleri',
+  // Estetik İşlemler
+  'Hollywood Smile',
+  'Diş Beyazlatma (Ofis–Ev Tipi)',
+  'Diş Eti Şekillendirme (Gingivoplasti)',
+  'Gummy Smile Botoks / Lazer',
+  // Çocuk Tedavileri
+  'Çocuk Dolguları',
+  'Çocuk Kanal Tedavisi (Pulpotomi/Pulpektomi)',
+  'Çocuk Protezleri',
+  'Sedasyon / Genel Anestezi',
+];
 
 export default function ClinicStaffPage() {
   const router = useRouter();
   const [clinic, setClinic] = useState<any>(null);
-  const [staff, setStaff] = useState<Staff[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
+  const [editingStaff, setEditingStaff] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',
     title: '',
-    specialty: '',
+    specialties: [] as string[],
     phone: '',
     email: '',
-    tcNumber: '',
-    licenseNumber: '',
-    notes: '',
     services: [] as string[],
   });
 
-  const loadData = () => {
-    const currentClinic = getCurrentClinic();
-    if (!currentClinic) {
-      router.push('/clinic/login');
-      return;
-    }
-    setClinic(currentClinic);
-    
-    const clinicStaff = getClinicStaff(currentClinic.id);
-    setStaff(clinicStaff);
-  };
-
   useEffect(() => {
-    loadData();
-
-    // Subscribe to real-time updates
-    const unsubscribe = subscribeToEvents((eventData) => {
-      if (
-        eventData.type === 'staff:created' ||
-        eventData.type === 'staff:updated' ||
-        eventData.type === 'staff:deleted'
-      ) {
-        loadData();
+    const loadClinic = async () => {
+      const clinicData = await getCurrentClinicWithUUID();
+      if (!clinicData) {
+        router.push('/clinic/login');
+        return;
       }
-    });
-
-    return () => {
-      unsubscribe();
+      setClinic(clinicData.clinic);
+      loadStaff(clinicData.clinicId);
     };
+    loadClinic();
   }, [router]);
 
-  const handleAddStaff = () => {
-    setEditingStaff(null);
-    setFormData({
-      name: '',
-      title: '',
-      specialty: '',
-      phone: '',
-      email: '',
-      tcNumber: '',
-      licenseNumber: '',
-      notes: '',
-      services: [],
-    });
-    setShowAddModal(true);
+  const loadStaff = async (clinicId: string) => {
+    try {
+      setLoading(true);
+      const result = await getClinicStaff(clinicId, {
+        search: searchQuery || undefined,
+        isActive: true,
+      });
+
+      if (result.success && result.staff) {
+        setStaff(result.staff);
+      }
+    } catch (error: any) {
+      console.error('Error loading staff:', error);
+      showToast('Kadro yüklenirken bir hata oluştu', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditStaff = (staffMember: Staff) => {
+  const handleAddStaff = async () => {
+    if (!clinic || !formData.name || !formData.title) {
+      showToast('Lütfen tüm gerekli alanları doldurun', 'error');
+      return;
+    }
+
+    try {
+      // specialties array'ini specialty string'ine dönüştür ve specialties field'ını çıkar
+      const { specialties, ...restFormData } = formData;
+      // Prepare data - don't send empty services array
+      const staffData: any = {
+        name: restFormData.name,
+        title: restFormData.title,
+        is_active: true,
+      };
+
+      // Send specialty as array to match database schema
+      if (specialties.length > 0) {
+        staffData.specialty = specialties;
+      }
+      if (restFormData.phone.trim()) {
+        staffData.phone = restFormData.phone.trim();
+      }
+      if (restFormData.email.trim()) {
+        staffData.email = restFormData.email.trim();
+      }
+      if (restFormData.services.length > 0) {
+        staffData.services = restFormData.services;
+      }
+
+      const result = await createStaff(clinic.id, staffData);
+
+      if (result.success) {
+        showToast('Kadro üyesi eklendi', 'success');
+        setShowAddModal(false);
+        setFormData({ name: '', title: '', specialties: [], phone: '', email: '', services: [] });
+        loadStaff(clinic.id);
+      } else {
+        showToast(result.error || 'Kadro üyesi eklenemedi', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error adding staff:', error);
+      showToast('Kadro üyesi eklenirken bir hata oluştu', 'error');
+    }
+  };
+
+  const handleEditStaff = (staffMember: any) => {
     setEditingStaff(staffMember);
+    // Parse specialty - could be string or array
+    let specialties: string[] = [];
+    if (staffMember.specialty) {
+      if (Array.isArray(staffMember.specialty)) {
+        specialties = staffMember.specialty;
+      } else if (typeof staffMember.specialty === 'string') {
+        // If it's a comma-separated string, split it
+        specialties = staffMember.specialty.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      }
+    }
+    
     setFormData({
       name: staffMember.name,
       title: staffMember.title,
-      specialty: staffMember.specialty || '',
+      specialties: specialties,
       phone: staffMember.phone || '',
       email: staffMember.email || '',
-      tcNumber: staffMember.tcNumber || '',
-      licenseNumber: staffMember.licenseNumber || '',
-      notes: staffMember.notes || '',
       services: staffMember.services || [],
     });
     setShowAddModal(true);
   };
 
-  const handleDeleteStaff = (staffId: string) => {
-    if (confirm('Bu personeli silmek istediğinize emin misiniz?')) {
-      const result = deleteStaff(staffId);
-      if (!result.success) {
-        alert(result.error || 'Silme işlemi başarısız oldu');
-      }
-    }
-  };
-
-  const handleSaveStaff = () => {
-    if (!clinic) return;
-
-    if (!formData.name || !formData.title) {
-      alert('Lütfen ad ve unvan alanlarını doldurun');
+  const handleUpdateStaff = async () => {
+    if (!editingStaff || !formData.name || !formData.title) {
+      showToast('Lütfen tüm gerekli alanları doldurun', 'error');
       return;
     }
 
-    if (editingStaff) {
-      const result = updateStaff(editingStaff.id, formData);
+    try {
+      // Prepare update data - don't send empty services array
+      const { specialties, ...restFormData } = formData;
+      const updateData: any = {
+        name: restFormData.name,
+        title: restFormData.title,
+      };
+
+      // Send specialty as array to match database schema
+      if (specialties.length > 0) {
+        updateData.specialty = specialties;
+      } else {
+        updateData.specialty = null; // Clear specialty if empty
+      }
+      if (restFormData.phone.trim()) {
+        updateData.phone = restFormData.phone.trim();
+      } else {
+        updateData.phone = null; // Clear phone if empty
+      }
+      if (restFormData.email.trim()) {
+        updateData.email = restFormData.email.trim();
+      } else {
+        updateData.email = null; // Clear email if empty
+      }
+      // Only include services if it has items, otherwise don't include the field
+      if (restFormData.services.length > 0) {
+        updateData.services = restFormData.services;
+      }
+      // Don't send empty array - let Supabase use NULL/default
+
+      const result = await updateStaff(editingStaff.id, updateData);
       if (result.success) {
+        showToast('Kadro üyesi güncellendi', 'success');
         setShowAddModal(false);
         setEditingStaff(null);
+        setFormData({ name: '', title: '', specialties: [], phone: '', email: '', services: [] });
+        if (clinic) loadStaff(clinic.id);
       } else {
-        alert(result.error || 'Güncelleme başarısız oldu');
+        showToast(result.error || 'Kadro üyesi güncellenemedi', 'error');
       }
-    } else {
-      const result = createStaff(clinic.id, formData);
-      if (result.success) {
-        setShowAddModal(false);
-        setFormData({
-          name: '',
-          title: '',
-          specialty: '',
-          phone: '',
-          email: '',
-          tcNumber: '',
-          licenseNumber: '',
-          notes: '',
-          services: [],
-        });
-      } else {
-        alert(result.error || 'Ekleme başarısız oldu');
-      }
+    } catch (error: any) {
+      console.error('Error updating staff:', error);
+      showToast('Kadro üyesi güncellenirken bir hata oluştu', 'error');
     }
   };
 
-  const filteredStaff = staff.filter(s => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        s.name.toLowerCase().includes(query) ||
-        s.title.toLowerCase().includes(query) ||
-        (s.specialty && s.specialty.toLowerCase().includes(query))
-      );
+  const handleDeleteStaff = async (staffId: string) => {
+    if (!confirm('Bu kadro üyesini silmek istediğinizden emin misiniz?')) {
+      return;
     }
-    return true;
-  });
+
+    try {
+      const result = await deleteStaff(staffId);
+      if (result.success) {
+        showToast('Kadro üyesi silindi', 'success');
+        if (clinic) loadStaff(clinic.id);
+      } else {
+        showToast(result.error || 'Kadro üyesi silinemedi', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error deleting staff:', error);
+      showToast('Kadro üyesi silinirken bir hata oluştu', 'error');
+    }
+  };
 
   if (!clinic) {
     return null; // Will redirect
@@ -186,7 +313,7 @@ export default function ClinicStaffPage() {
               </p>
             </div>
             <button
-              onClick={handleAddStaff}
+              onClick={() => setShowAddModal(true)}
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition flex items-center gap-2"
             >
               <UserPlus size={18} />
@@ -209,104 +336,67 @@ export default function ClinicStaffPage() {
           </div>
 
           {/* Staff List */}
-          {filteredStaff.length === 0 ? (
+          {loading ? (
+            <div className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-12 text-center">
+              <p className="text-slate-400 font-light">Yükleniyor...</p>
+            </div>
+          ) : staff.length === 0 ? (
             <div className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-12 text-center">
               <Users className="mx-auto mb-4 text-slate-500" size={48} />
-              <h2 className="text-xl font-light mb-2">
-                {staff.length === 0 ? 'Henüz kadro üyesi yok' : 'Personel bulunamadı'}
-              </h2>
+              <h2 className="text-xl font-light mb-2">Henüz kadro üyesi yok</h2>
               <p className="text-slate-400 font-light mb-6">
-                {staff.length === 0
-                  ? 'İlk hekim veya personeli ekleyin'
-                  : 'Arama kriterlerinize uygun personel bulunamadı'}
+                İlk hekim veya personeli ekleyin
               </p>
-              {staff.length === 0 && (
-                <button
-                  onClick={handleAddStaff}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition"
-                >
-                  Yeni Ekle
-                </button>
-              )}
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition"
+              >
+                Yeni Ekle
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredStaff.map((staffMember) => (
+              {staff.map((staffMember) => (
                 <div
                   key={staffMember.id}
-                  className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-6 hover:border-blue-400/50 transition"
+                  className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-6"
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
-                        <Users size={24} className="text-blue-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-light">{staffMember.name}</h3>
-                        <p className="text-sm text-slate-400 font-light">{staffMember.title}</p>
-                      </div>
+                    <div>
+                      <h3 className="text-lg font-light mb-1">{staffMember.name}</h3>
+                      <p className="text-sm text-slate-400 font-light">{staffMember.title}</p>
+                      {staffMember.specialty && (
+                        <p className="text-xs text-slate-500 font-light mt-1">
+                          {Array.isArray(staffMember.specialty) ? staffMember.specialty.join(', ') : staffMember.specialty}
+                        </p>
+                      )}
+                      {staffMember.services && staffMember.services.length > 0 && (
+                        <p className="text-xs text-slate-500 font-light mt-1">
+                          {staffMember.services.length} hizmet
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEditStaff(staffMember)}
-                        className="p-2 hover:bg-blue-500/20 rounded-lg transition"
+                        className="p-2 hover:bg-slate-700/50 rounded transition"
                       >
                         <Edit2 size={16} className="text-blue-400" />
                       </button>
                       <button
                         onClick={() => handleDeleteStaff(staffMember.id)}
-                        className="p-2 hover:bg-red-500/20 rounded-lg transition"
+                        className="p-2 hover:bg-slate-700/50 rounded transition"
                       >
                         <Trash2 size={16} className="text-red-400" />
                       </button>
                     </div>
                   </div>
-
-                  <div className="space-y-2 text-sm">
-                    {staffMember.specialty && (
-                      <div className="flex items-center gap-2 text-slate-300">
-                        <Briefcase size={14} className="text-slate-400" />
-                        <span className="font-light">{staffMember.specialty}</span>
-                      </div>
-                    )}
-                    {staffMember.phone && (
-                      <div className="flex items-center gap-2 text-slate-300">
-                        <Phone size={14} className="text-slate-400" />
-                        <span className="font-light">{staffMember.phone}</span>
-                      </div>
-                    )}
-                    {staffMember.email && (
-                      <div className="flex items-center gap-2 text-slate-300">
-                        <Mail size={14} className="text-slate-400" />
-                        <span className="font-light truncate">{staffMember.email}</span>
-                      </div>
-                    )}
-                    {staffMember.licenseNumber && (
-                      <div className="text-xs text-slate-400 font-light">
-                        Lisans: {staffMember.licenseNumber}
-                      </div>
-                    )}
-                    {staffMember.services && staffMember.services.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-slate-700/50">
-                        <p className="text-xs text-slate-400 font-light mb-2">Hizmetler:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {staffMember.services.slice(0, 3).map((service) => (
-                            <span
-                              key={service}
-                              className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded font-light"
-                            >
-                              {service}
-                            </span>
-                          ))}
-                          {staffMember.services.length > 3 && (
-                            <span className="text-xs px-2 py-1 bg-slate-700/50 text-slate-400 rounded font-light">
-                              +{staffMember.services.length - 3} daha
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {staffMember.phone && (
+                    <p className="text-xs text-slate-400 font-light mb-1">Tel: {staffMember.phone}</p>
+                  )}
+                  {staffMember.email && (
+                    <p className="text-xs text-slate-400 font-light">Email: {staffMember.email}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -315,217 +405,133 @@ export default function ClinicStaffPage() {
           {/* Add/Edit Modal */}
           {showAddModal && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-light">
-                    {editingStaff ? 'Personel Düzenle' : 'Yeni Personel Ekle'}
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setShowAddModal(false);
-                      setEditingStaff(null);
-                    }}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition"
-                  >
-                    <X size={20} className="text-slate-400" />
-                  </button>
-                </div>
-
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full">
+                <h2 className="text-xl font-light mb-4">
+                  {editingStaff ? 'Kadro Üyesi Düzenle' : 'Yeni Kadro Üyesi Ekle'}
+                </h2>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-light text-slate-300 mb-2">
-                      Ad Soyad *
-                    </label>
+                    <label className="block text-sm text-slate-300 mb-2">Ad Soyad *</label>
                     <input
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
-                      placeholder="Örn: Dr. Ahmet Yılmaz"
+                      className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-light text-slate-300 mb-2">
-                      Unvan *
-                    </label>
+                    <label className="block text-sm text-slate-300 mb-2">Ünvan *</label>
                     <select
                       value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
+                      onChange={(e) => {
+                        const newTitle = e.target.value;
+                        // Eğer Diş Hekimi dışında bir ünvan seçilirse, uzmanlık ve hizmetleri temizle
+                        if (newTitle !== 'Diş Hekimi') {
+                          setFormData({ ...formData, title: newTitle, specialties: [], services: [] });
+                        } else {
+                          setFormData({ ...formData, title: newTitle });
+                        }
+                      }}
+                      className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-400/50"
                     >
-                      <option value="">Unvan seçiniz</option>
-                      <optgroup label="Hekimler">
-                        <option value="Diş Hekimi">Diş Hekimi</option>
-                        <option value="Uzman Diş Hekimi">Uzman Diş Hekimi</option>
-                        <option value="Ortodonti Uzmanı">Ortodonti Uzmanı</option>
-                        <option value="Oral ve Maxillofacial Cerrah">Oral ve Maxillofacial Cerrah</option>
-                        <option value="Periodontoloji Uzmanı">Periodontoloji Uzmanı</option>
-                        <option value="Endodonti Uzmanı">Endodonti Uzmanı</option>
-                        <option value="Prostodonti Uzmanı">Prostodonti Uzmanı</option>
-                        <option value="Pedodonti Uzmanı">Pedodonti Uzmanı</option>
-                        <option value="Estetik Diş Hekimi">Estetik Diş Hekimi</option>
-                        <option value="İmplantoloji Uzmanı">İmplantoloji Uzmanı</option>
-                      </optgroup>
-                      <optgroup label="Teknik Personel">
-                        <option value="Diş Teknisyeni">Diş Teknisyeni</option>
-                        <option value="Ortodonti Teknisyeni">Ortodonti Teknisyeni</option>
-                        <option value="Protez Teknisyeni">Protez Teknisyeni</option>
-                      </optgroup>
-                      <optgroup label="Yardımcı Personel">
-                        <option value="Diş Hekimi Asistanı">Diş Hekimi Asistanı</option>
-                        <option value="Sterilizasyon Sorumlusu">Sterilizasyon Sorumlusu</option>
-                        <option value="Hasta Kabul Sorumlusu">Hasta Kabul Sorumlusu</option>
-                        <option value="Sekreter">Sekreter</option>
-                        <option value="Muhasebe Sorumlusu">Muhasebe Sorumlusu</option>
-                        <option value="Yönetici">Yönetici</option>
-                        <option value="Klinik Müdürü">Klinik Müdürü</option>
-                        <option value="Temizlik Personeli">Temizlik Personeli</option>
-                      </optgroup>
+                      <option value="">Ünvan Seçiniz</option>
+                      {titleOptions.map((title) => (
+                        <option key={title} value={title}>
+                          {title}
+                        </option>
+                      ))}
                     </select>
                   </div>
-
+                  {formData.title === 'Diş Hekimi' && (
+                    <>
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">Uzmanlık (Çoklu Seçim)</label>
+                        <div className="max-h-40 overflow-y-auto border border-slate-600 rounded-lg p-2 bg-slate-700/50">
+                          {specialtyOptions.map((specialty) => (
+                            <label key={specialty} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-slate-600/30 rounded px-2">
+                              <input
+                                type="checkbox"
+                                checked={formData.specialties.includes(specialty)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({ ...formData, specialties: [...formData.specialties, specialty] });
+                                  } else {
+                                    setFormData({ ...formData, specialties: formData.specialties.filter(s => s !== specialty) });
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-400"
+                              />
+                              <span className="text-sm text-slate-300">{specialty}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {formData.specialties.length > 0 && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Seçilen: {formData.specialties.length} uzmanlık
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">Hizmetler (Çoklu Seçim)</label>
+                        <div className="max-h-60 overflow-y-auto border border-slate-600 rounded-lg p-2 bg-slate-700/50">
+                          {serviceOptions.map((service) => (
+                            <label key={service} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-slate-600/30 rounded px-2">
+                              <input
+                                type="checkbox"
+                                checked={formData.services.includes(service)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({ ...formData, services: [...formData.services, service] });
+                                  } else {
+                                    setFormData({ ...formData, services: formData.services.filter(s => s !== service) });
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-400"
+                              />
+                              <span className="text-sm text-slate-300">{service}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {formData.services.length > 0 && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Seçilen: {formData.services.length} hizmet
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                   <div>
-                    <label className="block text-sm font-light text-slate-300 mb-2">
-                      Uzmanlık Alanı
-                    </label>
+                    <label className="block text-sm text-slate-300 mb-2">Telefon</label>
                     <input
-                      type="text"
-                      value={formData.specialty}
-                      onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
-                      placeholder="Örn: Ortodonti, Endodonti"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-light text-slate-300 mb-2">
-                        Telefon
-                      </label>
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
-                        placeholder="0555 123 45 67"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-light text-slate-300 mb-2">
-                        E-posta
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
-                        placeholder="ornek@email.com"
-                      />
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-sm font-light text-slate-300 mb-2">
-                      Lisans Numarası
-                    </label>
+                    <label className="block text-sm text-slate-300 mb-2">Email</label>
                     <input
-                      type="text"
-                      value={formData.licenseNumber}
-                      onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
-                      placeholder="Hekimler için"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-light text-slate-300 mb-2">
-                      Sunduğu Hizmetler (Hekimler için)
-                    </label>
-                    <div className="max-h-64 overflow-y-auto border border-slate-600/50 rounded-lg p-3 bg-slate-800/30">
-                      {[
-                        'Diş Taşı Temizliği (Detartraj)',
-                        'Kompozit Dolgu',
-                        'Tek Kök / Çok Kök Kanal',
-                        'Tek İmplant',
-                        'Metal–Seramik Teller',
-                        'Zirkonyum Kron/Bridge',
-                        'Hollywood Smile',
-                        'Şeffaf Plak/Invisalign',
-                        'Çocuk Ortodontisi',
-                        'Diş Beyazlatma (Ofis–Ev Tipi)',
-                        'E-max Porselen / Laminate Veneer',
-                        'All-on-4 / All-on-6 Sabit Protez',
-                        'Kemik Artırma (GBR – Greftleme)',
-                        'Mikroskop Destekli Kanal',
-                        'Kanal Yenileme (Retreatment)',
-                        'Kırık Diş Onarımı',
-                        'Basit / Komplike Diş Çekimi',
-                        'Gömülü 20\'lik Çekimi',
-                        'Çocuk Dolguları',
-                        'Çocuk Kanal Tedavisi (Pulpotomi/Pulpektomi)',
-                        'Tam/Parsiyel Protez',
-                        'Diş Eti Şekillendirme (Gingivoplasti)',
-                      ].map((service) => (
-                        <label
-                          key={service}
-                          className="flex items-center gap-2 p-2 hover:bg-slate-700/30 rounded cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formData.services.includes(service)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setFormData({
-                                  ...formData,
-                                  services: [...formData.services, service],
-                                });
-                              } else {
-                                setFormData({
-                                  ...formData,
-                                  services: formData.services.filter((s) => s !== service),
-                                });
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
-                          />
-                          <span className="text-sm font-light text-slate-300">{service}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="text-xs text-slate-400 font-light mt-2">
-                      Bu hekimin sunduğu hizmetleri seçin. Bu hizmetler klinik sayfasında ve randevu alma sayfasında görünecektir.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-light text-slate-300 mb-2">
-                      Notlar
-                    </label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      rows={3}
-                      className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light resize-none"
-                      placeholder="Ek notlar..."
-                    />
-                  </div>
-
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={handleSaveStaff}
-                      className="flex-1 px-6 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition flex items-center justify-center gap-2"
+                      onClick={editingStaff ? handleUpdateStaff : handleAddStaff}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition"
                     >
-                      <Save size={16} />
                       {editingStaff ? 'Güncelle' : 'Ekle'}
                     </button>
                     <button
                       onClick={() => {
                         setShowAddModal(false);
                         setEditingStaff(null);
+                        setFormData({ name: '', title: '', specialties: [], phone: '', email: '', services: [] });
                       }}
-                      className="px-6 py-2.5 border border-slate-600/50 hover:border-red-400/50 hover:text-red-400 rounded-lg transition font-light"
+                      className="px-4 py-2 border border-slate-600 hover:border-red-400 hover:text-red-400 rounded-lg font-light transition"
                     >
                       İptal
                     </button>
@@ -540,6 +546,7 @@ export default function ClinicStaffPage() {
           <Footer />
         </div>
       </div>
+      <ToastContainer />
     </div>
   );
 }

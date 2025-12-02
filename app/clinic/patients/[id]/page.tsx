@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
 import { getCurrentClinic } from '@/lib/auth-clinic';
-import { getPatientById, getPatientAppointmentHistory } from '@/lib/patients';
+import { getPatientById, getPatientAppointmentHistory } from '@/lib/services/patient-service';
 import {
   User,
   Phone,
@@ -28,8 +28,9 @@ export default function ClinicPatientDetailPage() {
   const [patient, setPatient] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadPatientData = async () => {
     const currentClinic = getCurrentClinic();
     if (!currentClinic) {
       router.push('/clinic/login');
@@ -39,18 +40,79 @@ export default function ClinicPatientDetailPage() {
 
     const patientId = params?.id as string;
     if (patientId) {
-      // TODO: Fetch patient from API
-      const foundPatient = getPatientById(patientId);
-      if (foundPatient && foundPatient.clinicId === currentClinic.id) {
-        setPatient(foundPatient);
-        // TODO: Fetch appointment history
-        const history = getPatientAppointmentHistory(patientId);
-        setAppointments(history);
-      } else {
+      try {
+        // Fetch patient from Supabase
+        const patientResult = await getPatientById(patientId);
+        if (patientResult.success && patientResult.patient) {
+          const foundPatient = patientResult.patient;
+          
+          // Check if patient belongs to this clinic
+          if (foundPatient.clinic_id !== currentClinic.id) {
+            router.push('/clinic/patients');
+            return;
+          }
+
+          // Calculate patient stats
+          const stats = {
+            totalAppointments: 0,
+            firstAppointmentDate: '',
+            lastAppointmentDate: '',
+          };
+
+          // Fetch appointment history
+          const historyResult = await getPatientAppointmentHistory(patientId);
+          if (historyResult.success && historyResult.appointments) {
+            const history = historyResult.appointments;
+            setAppointments(history);
+            
+            if (history.length > 0) {
+              stats.totalAppointments = history.length;
+              const sortedByDate = [...history].sort((a, b) => {
+                const dateA = new Date(`${a.date}T${a.time}`);
+                const dateB = new Date(`${b.date}T${b.time}`);
+                return dateA.getTime() - dateB.getTime();
+              });
+              stats.firstAppointmentDate = sortedByDate[0].date;
+              stats.lastAppointmentDate = sortedByDate[sortedByDate.length - 1].date;
+            }
+          }
+
+          // Merge patient data with stats
+          setPatient({
+            ...foundPatient,
+            totalAppointments: stats.totalAppointments,
+            firstAppointmentDate: stats.firstAppointmentDate || foundPatient.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            lastAppointmentDate: stats.lastAppointmentDate || foundPatient.last_appointment_date?.split('T')[0] || new Date().toISOString().split('T')[0],
+          });
+        } else {
+          router.push('/clinic/patients');
+        }
+      } catch (error) {
+        console.error('Error loading patient data:', error);
         router.push('/clinic/patients');
+      } finally {
+        setLoading(false);
       }
     }
+  };
+
+  useEffect(() => {
+    loadPatientData();
   }, [params, router]);
+
+  // Reload data when page becomes visible (e.g., when returning from appointment detail)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && clinic) {
+        loadPatientData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [clinic]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -91,7 +153,15 @@ export default function ClinicPatientDetailPage() {
     }
   };
 
-  if (!clinic || !patient) {
+  if (!clinic || loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!patient) {
     return null; // Will redirect
   }
 
@@ -126,11 +196,19 @@ export default function ClinicPatientDetailPage() {
                 <div>
                   <h1 className="text-3xl md:text-4xl font-light mb-2">{patient.name}</h1>
                   <div className="flex items-center gap-4 text-sm text-slate-400 font-light">
-                    <span>{patient.totalAppointments} randevu</span>
-                    <span>•</span>
-                    <span>İlk: {formatDate(patient.firstAppointmentDate)}</span>
-                    <span>•</span>
-                    <span>Son: {formatDate(patient.lastAppointmentDate)}</span>
+                    <span>{patient.totalAppointments || 0} randevu</span>
+                    {patient.firstAppointmentDate && (
+                      <>
+                        <span>•</span>
+                        <span>İlk: {formatDate(patient.firstAppointmentDate)}</span>
+                      </>
+                    )}
+                    {patient.lastAppointmentDate && (
+                      <>
+                        <span>•</span>
+                        <span>Son: {formatDate(patient.lastAppointmentDate)}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -154,28 +232,32 @@ export default function ClinicPatientDetailPage() {
                   Hasta Bilgileri
                 </h2>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 py-3 border-b border-slate-700/50">
-                    <Phone size={20} className="text-slate-400" />
-                    <div className="flex-1">
-                      <p className="text-xs text-slate-400 font-light mb-1">Telefon</p>
-                      <p className="text-sm font-light">{patient.phone}</p>
+                  {patient.phone && (
+                    <div className="flex items-center gap-3 py-3 border-b border-slate-700/50">
+                      <Phone size={20} className="text-slate-400" />
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-400 font-light mb-1">Telefon</p>
+                        <p className="text-sm font-light">{patient.phone}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-center gap-3 py-3 border-b border-slate-700/50">
-                    <Mail size={20} className="text-slate-400" />
-                    <div className="flex-1">
-                      <p className="text-xs text-slate-400 font-light mb-1">E-posta</p>
-                      <p className="text-sm font-light">{patient.email}</p>
+                  {patient.email && (
+                    <div className="flex items-center gap-3 py-3 border-b border-slate-700/50">
+                      <Mail size={20} className="text-slate-400" />
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-400 font-light mb-1">E-posta</p>
+                        <p className="text-sm font-light">{patient.email}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {patient.tcNumber && (
+                  {patient.tc_number && (
                     <div className="flex items-center gap-3 py-3 border-b border-slate-700/50">
                       <FileText size={20} className="text-slate-400" />
                       <div className="flex-1">
                         <p className="text-xs text-slate-400 font-light mb-1">TC Kimlik No</p>
-                        <p className="text-sm font-light">{patient.tcNumber}</p>
+                        <p className="text-sm font-light">{patient.tc_number}</p>
                       </div>
                     </div>
                   )}
@@ -190,14 +272,16 @@ export default function ClinicPatientDetailPage() {
               </div>
 
               {/* Medical Information */}
-              {(patient.allergies?.length > 0 || patient.chronicDiseases?.length > 0 || patient.medications?.length > 0) && (
+              {((Array.isArray(patient.allergies) && patient.allergies.length > 0) || 
+                (Array.isArray(patient.chronic_diseases) && patient.chronic_diseases.length > 0) || 
+                (Array.isArray(patient.medications) && patient.medications.length > 0)) && (
                 <div className="bg-slate-800/30 backdrop-blur border border-slate-700/50 rounded-xl p-6">
                   <h2 className="text-xl font-light mb-6 flex items-center gap-2">
                     <AlertCircle size={24} className="text-blue-400" />
                     Tıbbi Bilgiler
                   </h2>
                   <div className="space-y-4">
-                    {patient.allergies && patient.allergies.length > 0 && (
+                    {Array.isArray(patient.allergies) && patient.allergies.length > 0 && (
                       <div>
                         <p className="text-xs text-slate-400 font-light mb-2">Alerjiler</p>
                         <div className="flex flex-wrap gap-2">
@@ -213,11 +297,11 @@ export default function ClinicPatientDetailPage() {
                       </div>
                     )}
 
-                    {patient.chronicDiseases && patient.chronicDiseases.length > 0 && (
+                    {Array.isArray(patient.chronic_diseases) && patient.chronic_diseases.length > 0 && (
                       <div>
                         <p className="text-xs text-slate-400 font-light mb-2">Kronik Hastalıklar</p>
                         <div className="flex flex-wrap gap-2">
-                          {patient.chronicDiseases.map((disease: string, index: number) => (
+                          {patient.chronic_diseases.map((disease: string, index: number) => (
                             <span
                               key={index}
                               className="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full border border-orange-500/30 text-xs font-light"
@@ -229,7 +313,7 @@ export default function ClinicPatientDetailPage() {
                       </div>
                     )}
 
-                    {patient.medications && patient.medications.length > 0 && (
+                    {Array.isArray(patient.medications) && patient.medications.length > 0 && (
                       <div>
                         <p className="text-xs text-slate-400 font-light mb-2">Kullandığı İlaçlar</p>
                         <div className="flex flex-wrap gap-2">

@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
-import { getAppointmentsByUserId } from '@/lib/appointments';
-import { subscribeToEvents } from '@/lib/events';
+import { getAppointmentsByUser, updateAppointmentStatus as updateAppointmentStatusService } from '@/lib/services/appointment-service';
+import { supabase } from '@/lib/supabase';
+import ToastContainer, { showToast } from '@/components/Toast';
 import {
   Calendar,
   Clock,
@@ -20,92 +21,252 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 
-interface Appointment {
-  id: string;
-  userId: string;
-  clinicId: string;
-  clinicName: string;
-  doctorId?: string;
-  service: string;
-  date: string;
-  time: string;
-  notes?: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-  createdAt: string;
-}
-
-const APPOINTMENTS_STORAGE_KEY = 'randevudent_appointments';
-
-function getAllAppointments(): Appointment[] {
-  if (typeof window === 'undefined') return [];
-  const appointmentsJson = localStorage.getItem(APPOINTMENTS_STORAGE_KEY);
-  return appointmentsJson ? JSON.parse(appointmentsJson) : [];
-}
-
-function updateAppointmentStatus(appointmentId: string, status: 'pending' | 'confirmed' | 'cancelled' | 'completed'): void {
-  if (typeof window === 'undefined') return;
-  const appointments = getAllAppointments();
-  const appointmentIndex = appointments.findIndex(apt => apt.id === appointmentId);
-  if (appointmentIndex !== -1) {
-    appointments[appointmentIndex].status = status;
-    localStorage.setItem(APPOINTMENTS_STORAGE_KEY, JSON.stringify(appointments));
-  }
-}
-
 export default function AppointmentsPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'confirmed' | 'cancelled' | 'completed'>('all');
   const [filterDate, setFilterDate] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [newChangeRequestNotification, setNewChangeRequestNotification] = useState<any>(null);
+  const [statusUpdateNotification, setStatusUpdateNotification] = useState<any>(null);
 
-  const loadAppointments = async (currentUser: any) => {
-    if (!currentUser) return;
+  const loadAppointments = async () => {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    setUser(currentUser);
     
-    // Get user's appointments
-    const userAppointments = getAppointmentsByUserId(currentUser.id);
-    setAppointments(userAppointments);
+    try {
+      // Get user's appointments from Supabase
+      const filters: any = {};
+      if (filterStatus !== 'all') {
+        filters.status = filterStatus;
+      }
+      if (filterDate !== 'all') {
+        filters.date = filterDate === 'upcoming' ? 'upcoming' : 'past';
+      }
+
+      const result = await getAppointmentsByUser(currentUser.id, filters);
+      if (result.success && result.appointments) {
+        // Transform appointments to match the expected format
+        const transformedAppointments = result.appointments.map((apt: any) => ({
+          id: apt.id,
+          userId: apt.user_id,
+          clinicId: apt.clinic_id,
+          clinicName: apt.clinic_name,
+          doctorId: apt.doctor_id,
+          doctorName: apt.doctor_name,
+          service: apt.service,
+          date: apt.date,
+          time: apt.time,
+          notes: apt.notes,
+          status: apt.status,
+          createdAt: apt.created_at,
+        }));
+
+        // Apply date filter if needed (since Supabase filter might not handle this correctly)
+        let filteredAppointments = transformedAppointments;
+        if (filterDate !== 'all') {
+          const now = new Date();
+          filteredAppointments = transformedAppointments.filter((apt: any) => {
+            const appointmentDate = new Date(`${apt.date}T${apt.time}`);
+            return filterDate === 'upcoming' ? appointmentDate >= now : appointmentDate < now;
+          });
+        }
+
+        // Sort by date (upcoming first - yakın tarihten uzak tarihe)
+        filteredAppointments.sort((a: any, b: any) => {
+          const dateA = new Date(`${a.date}T${a.time}`);
+          const dateB = new Date(`${b.date}T${b.time}`);
+          return dateA.getTime() - dateB.getTime();
+        });
+
+        setAppointments(filteredAppointments);
+      } else {
+        setAppointments([]);
+      }
+    } catch (error) {
+      console.error('Error loading appointments:', error);
+      showToast('Randevular yüklenirken bir hata oluştu', 'error');
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const currentUser = await getCurrentUser();
-      if (!currentUser) {
-        router.push('/login');
-        return;
-      }
-      setUser(currentUser);
-      loadAppointments(currentUser);
-    };
+    loadAppointments();
+  }, [router, filterStatus, filterDate]);
 
-    checkAuth();
+  // Play notification sound
+  const playNotificationSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 600;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.log('Could not play notification sound:', error);
+    }
+  };
 
-    // Subscribe to real-time updates
-    const unsubscribe = subscribeToEvents((eventData) => {
-      if (
-        eventData.type === 'appointment:created' ||
-        eventData.type === 'appointment:updated' ||
-        eventData.type === 'appointment:deleted'
-      ) {
-        if (user) {
-          loadAppointments(user);
+  // Realtime subscription for appointments
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`user-appointments-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointments',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Appointment updated:', payload);
+          const oldData = payload.old as any;
+          const newData = payload.new as any;
+          
+          // Check if status changed
+          if (oldData.status !== newData.status) {
+            playNotificationSound();
+            let message = '';
+            if (newData.status === 'confirmed') {
+              message = 'Randevunuz onaylandı!';
+            } else if (newData.status === 'cancelled') {
+              message = 'Randevunuz iptal edildi';
+            } else if (newData.status === 'completed') {
+              message = 'Randevunuz tamamlandı';
+            }
+            if (message) {
+              setStatusUpdateNotification({
+                message,
+                type: 'status_update',
+                timestamp: Date.now(),
+              });
+              setTimeout(() => setStatusUpdateNotification(null), 5000);
+            }
+          }
+          
+          // Check if appointment was updated (date, time, doctor, service)
+          if (oldData.date !== newData.date || 
+              oldData.time !== newData.time || 
+              oldData.doctor_id !== newData.doctor_id ||
+              oldData.service !== newData.service) {
+            playNotificationSound();
+            setStatusUpdateNotification({
+              message: 'Randevunuz güncellendi!',
+              type: 'appointment_updated',
+              timestamp: Date.now(),
+            });
+            setTimeout(() => setStatusUpdateNotification(null), 5000);
+          }
+          
+          // Reload appointments
+          loadAppointments();
         }
-      }
-    });
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointment_change_requests',
+        },
+        async (payload) => {
+          const changeRequest = payload.new as any;
+          // Check if this change request is for one of our appointments
+          const { data: appointmentData } = await supabase
+            .from('appointments')
+            .select('id, user_id')
+            .eq('id', changeRequest.appointment_id)
+            .single();
+          
+          if (appointmentData && appointmentData.user_id === user.id) {
+            console.log('New change request detected:', payload);
+            playNotificationSound();
+            setNewChangeRequestNotification({
+              message: 'Klinik randevunuzda değişiklik yapmak istiyor!',
+              type: 'change_request',
+              timestamp: Date.now(),
+            });
+            loadAppointments();
+            setTimeout(() => setNewChangeRequestNotification(null), 5000);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointment_change_requests',
+        },
+        async (payload) => {
+          const changeRequest = payload.new as any;
+          // Check if this change request is for one of our appointments
+          const { data: appointmentData } = await supabase
+            .from('appointments')
+            .select('id, user_id')
+            .eq('id', changeRequest.appointment_id)
+            .single();
+          
+          if (appointmentData && appointmentData.user_id === user.id) {
+            console.log('Change request updated:', payload);
+            const oldData = payload.old as any;
+            // If change request was approved, the appointment was already updated
+            if (oldData.status === 'pending' && changeRequest.status === 'approved') {
+              playNotificationSound();
+              setStatusUpdateNotification({
+                message: 'Değişiklik talebiniz onaylandı!',
+                type: 'change_approved',
+                timestamp: Date.now(),
+              });
+              setTimeout(() => setStatusUpdateNotification(null), 5000);
+            }
+            loadAppointments();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
     return () => {
-      unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [router, filterStatus, filterDate, user]);
+  }, [user]);
 
   const handleCancelAppointment = async (appointmentId: string) => {
     if (confirm('Randevuyu iptal etmek istediğinize emin misiniz?')) {
-      const { updateAppointmentStatus } = await import('@/lib/appointments');
-      const result = updateAppointmentStatus(appointmentId, 'cancelled');
-      if (result.success && user) {
-        loadAppointments(user);
-      } else {
-        alert(result.error || 'İptal işlemi başarısız oldu');
+      try {
+        const result = await updateAppointmentStatusService(appointmentId, 'cancelled');
+        if (result.success) {
+          showToast('Randevu iptal edildi', 'success');
+          // Reload appointments
+          await loadAppointments();
+        } else {
+          showToast(result.error || 'Randevu iptal edilemedi', 'error');
+        }
+      } catch (error) {
+        console.error('Error cancelling appointment:', error);
+        showToast('Randevu iptal edilirken bir hata oluştu', 'error');
       }
     }
   };
@@ -143,8 +304,12 @@ export default function AppointmentsPage() {
     });
   };
 
-  if (!user) {
-    return null; // Will redirect
+  if (!user || loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -167,6 +332,36 @@ export default function AppointmentsPage() {
             <ArrowLeft size={16} />
             Ana Sayfaya Dön
           </Link>
+
+          {/* Notifications */}
+          {statusUpdateNotification && (
+            <div className="mb-4 animate-pulse bg-blue-500/20 border border-blue-500/50 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping" />
+                <span className="text-blue-400 font-light">{statusUpdateNotification.message}</span>
+              </div>
+              <button
+                onClick={() => setStatusUpdateNotification(null)}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {newChangeRequestNotification && (
+            <div className="mb-4 animate-pulse bg-yellow-500/20 border border-yellow-500/50 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping" />
+                <span className="text-yellow-400 font-light">{newChangeRequestNotification.message}</span>
+              </div>
+              <button
+                onClick={() => setNewChangeRequestNotification(null)}
+                className="text-yellow-400 hover:text-yellow-300"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
 
           {/* Header */}
           <div className="mb-8">
@@ -309,6 +504,7 @@ export default function AppointmentsPage() {
           <Footer />
         </div>
       </div>
+      <ToastContainer />
     </div>
   );
 }

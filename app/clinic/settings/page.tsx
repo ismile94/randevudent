@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
-import { getCurrentClinic, updateClinicSettings } from '@/lib/auth-clinic';
-import { subscribeToEvents } from '@/lib/events';
+import { getCurrentClinicWithUUID } from '@/lib/utils/clinic-utils';
+import { getCurrentClinic } from '@/lib/auth-clinic';
+import { getClinicById, updateClinic } from '@/lib/services/clinic-service';
 import {
   Settings,
   Building2,
@@ -34,52 +35,81 @@ export default function ClinicSettingsPage() {
     postalCode: '',
   });
 
-  const loadData = () => {
-    const currentClinic = getCurrentClinic();
-    if (!currentClinic) {
-      router.push('/clinic/login');
-      return;
-    }
-    setClinic(currentClinic);
-    setFormData({
-      clinicName: currentClinic.clinicName || '',
-      phone: currentClinic.phone || '',
-      email: currentClinic.email || '',
-      website: currentClinic.website || '',
-      address: currentClinic.address || '',
-      district: currentClinic.district || '',
-      city: currentClinic.city || '',
-      postalCode: currentClinic.postalCode || '',
-    });
-  };
-
   useEffect(() => {
-    loadData();
-
-    // Subscribe to real-time updates
-    const unsubscribe = subscribeToEvents((eventData) => {
-      if (eventData.type === 'clinic:settings:updated') {
-        loadData();
+    const loadClinic = async () => {
+      const clinicData = await getCurrentClinicWithUUID();
+      if (!clinicData) {
+        router.push('/clinic/login');
+        return;
       }
-    });
-
-    return () => {
-      unsubscribe();
+      setClinic(clinicData.clinic);
+      loadClinicData(clinicData.clinicId);
     };
+    loadClinic();
   }, [router]);
 
-  const handleSave = () => {
+  const loadClinicData = async (clinicId: string) => {
+    try {
+      const result = await getClinicById(clinicId);
+      if (result.success && result.clinic) {
+        const clinicData = result.clinic;
+        setClinic(clinicData);
+        setFormData({
+          clinicName: clinicData.clinic_name || '',
+          phone: clinicData.phone || '',
+          email: clinicData.email || '',
+          website: clinicData.website || '',
+          address: clinicData.address || '',
+          district: clinicData.district || '',
+          city: clinicData.city || '',
+          postalCode: clinicData.postal_code || '',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error loading clinic data:', error);
+    }
+  };
+
+  const handleSave = async () => {
     if (!clinic) return;
 
-    const result = updateClinicSettings(clinic.id, formData);
-    if (result.success) {
-      setIsEditing(false);
-      if (result.clinic) {
-        setClinic(result.clinic);
+    try {
+      const result = await updateClinic(clinic.id, {
+        clinic_name: formData.clinicName,
+        phone: formData.phone,
+        email: formData.email,
+        website: formData.website || undefined,
+        address: formData.address,
+        district: formData.district,
+        city: formData.city,
+        postal_code: formData.postalCode,
+      });
+
+      if (result.success) {
+        setIsEditing(false);
+        // localStorage'daki clinic bilgisini de güncelle
+        const currentClinic = getCurrentClinic();
+        if (currentClinic && result.clinic) {
+          const updatedClinic = {
+            ...currentClinic,
+            clinicName: result.clinic.clinic_name,
+            phone: result.clinic.phone,
+            email: result.clinic.email,
+            website: result.clinic.website,
+            address: result.clinic.address,
+            district: result.clinic.district,
+            city: result.clinic.city,
+            postalCode: result.clinic.postal_code,
+          };
+          localStorage.setItem('randevudent_current_clinic', JSON.stringify(updatedClinic));
+        }
+        alert('Ayarlar başarıyla kaydedildi');
+      } else {
+        alert(result.error || 'Ayarlar kaydedilemedi');
       }
-      alert('Ayarlar başarıyla kaydedildi');
-    } else {
-      alert(result.error || 'Kaydetme başarısız oldu');
+    } catch (error: any) {
+      console.error('Error saving settings:', error);
+      alert('Ayarlar kaydedilirken bir hata oluştu');
     }
   };
 
@@ -199,7 +229,7 @@ export default function ClinicSettingsPage() {
                   <Building2 size={20} className="text-slate-400" />
                   <div className="flex-1">
                     <p className="text-xs text-slate-400 font-light mb-1">Klinik Adı</p>
-                    <p className="text-sm font-light">{clinic.clinicName}</p>
+                    <p className="text-sm font-light">{clinic.clinic_name || clinic.clinicName}</p>
                   </div>
                 </div>
 
@@ -219,16 +249,16 @@ export default function ClinicSettingsPage() {
                   </div>
                 </div>
 
-                {clinic.website && (
+                {(clinic.website || clinic.clinicName) && (
                   <div className="flex items-center gap-3 py-3">
                     <span className="text-slate-400">Web:</span>
                     <a
-                      href={clinic.website}
+                      href={clinic.website || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-400 hover:text-blue-300 transition text-sm font-light"
                     >
-                      {clinic.website}
+                      {clinic.website || 'Website eklenmemiş'}
                     </a>
                   </div>
                 )}
@@ -248,7 +278,7 @@ export default function ClinicSettingsPage() {
                 <div className="flex-1">
                   <p className="text-xs text-slate-400 font-light mb-1">Adres</p>
                   <p className="text-sm font-light">
-                    {clinic.address}, {clinic.district}, {clinic.city}
+                    {clinic.address || formData.address}, {clinic.district || formData.district}, {clinic.city || formData.city}
                   </p>
                 </div>
               </div>

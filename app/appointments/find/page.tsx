@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
-import { getAllClinics, getCurrentClinic } from '@/lib/auth-clinic';
-import { getClinicReviews, calculateAverageRating } from '@/lib/reviews';
-import { getClinicStaff } from '@/lib/staff';
 import {
   Calendar,
   Clock,
@@ -47,150 +44,116 @@ interface Clinic {
   reviewCount: number;
 }
 
-// Helper function to check if staff member is a doctor
-function isDoctor(staff: any): boolean {
-  const titleLower = staff.title?.toLowerCase() || '';
-  // Exclude non-medical staff
-  const excludedTitles = ['asistan', 'sekreter', 'yönetici', 'müdür', 'teknisyen', 'temizlik', 'muhasebe', 'kabul'];
-  if (excludedTitles.some(excluded => titleLower.includes(excluded))) {
-    return false;
-  }
-  // Include medical staff
-  return (
-    titleLower.includes('hekim') ||
-    titleLower.includes('doktor') ||
-    titleLower.includes('dr') ||
-    titleLower.includes('diş hekimi') ||
-    titleLower.includes('uzman') ||
-    !!staff.specialty
-  );
-}
-
-// Mock test clinic - always available for patients
-const mockTestClinic: Clinic = {
-  id: 'clinic-1',
-  name: 'Ağız ve Diş Sağlığı Merkezi',
-  address: 'Atatürk Cad. No:123 Daire:5',
-  city: 'İstanbul',
-  district: 'Kadıköy',
-  phone: '0216 123 45 67',
-  email: 'test@klinik.com',
-  services: [],
-  doctors: [],
-  workingHours: [
-    { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-    { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-    { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-    { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-    { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-    { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-    { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-  ],
-  rating: 0,
-  reviewCount: 0,
-};
-
-// Helper function to load real clinics data
-function loadRealClinics(): Clinic[] {
-  const clinics = getAllClinics();
-  const currentClinic = getCurrentClinic();
-  
-  // Include current clinic if logged in
-  const allClinics = [...clinics];
-  if (currentClinic && !allClinics.find(c => c.id === currentClinic.id)) {
-    allClinics.push(currentClinic);
-  }
-  
-  // Only show approved clinics
-  const approvedClinics = allClinics.filter(c => c.status === 'approved');
-  
-  // Transform to Clinic interface with real data
-  const realClinics = approvedClinics.map(clinic => {
-    const reviews = getClinicReviews(clinic.id);
-    const staff = getClinicStaff(clinic.id);
-    
-    // Get doctors from staff
-    const doctors = staff
-      .filter(isDoctor)
-      .map(s => ({
-        id: s.id,
-        name: s.name,
-        specialty: s.specialty || s.title,
-        services: s.services || [],
-      }));
-    
-    // Collect services from staff
-    const allServices = new Set<string>();
-    staff.forEach(s => {
-      if (s.services) {
-        s.services.forEach((service: string) => allServices.add(service));
-      }
-    });
-    
-    // Calculate rating from reviews
-    const rating = reviews.length > 0 ? calculateAverageRating(reviews) : 0;
-    
-    return {
-      id: clinic.id,
-      name: clinic.clinicName,
-      address: clinic.address,
-      city: clinic.city,
-      district: clinic.district,
-      phone: clinic.phone,
-      email: clinic.email,
-      services: Array.from(allServices),
-      doctors,
-      workingHours: clinic.workingHours || [
-        { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-        { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-        { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-        { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-        { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-        { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-        { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-      ],
-      rating,
-      reviewCount: reviews.length,
-    };
-  });
-  
-  // Add mock test clinic if not already in the list
-  const hasTestClinic = realClinics.find(c => c.id === 'clinic-1');
-  if (!hasTestClinic) {
-    // Load real data for test clinic
-    const testClinicStaff = getClinicStaff('clinic-1');
-    const testClinicDoctors = testClinicStaff
-      .filter(isDoctor)
-      .map(s => ({
-        id: s.id,
-        name: s.name,
-        specialty: s.specialty || s.title,
-        services: s.services || [],
-      }));
-    
-    const testClinicServices = new Set<string>();
-    testClinicStaff.forEach(s => {
-      if (s.services) {
-        s.services.forEach((service: string) => testClinicServices.add(service));
-      }
-    });
-    
-    const testClinicReviews = getClinicReviews('clinic-1');
-    const testClinicRating = testClinicReviews.length > 0 ? calculateAverageRating(testClinicReviews) : 0;
-    
-    const testClinicWithData: Clinic = {
-      ...mockTestClinic,
-      doctors: testClinicDoctors,
-      services: Array.from(testClinicServices),
-      rating: testClinicRating,
-      reviewCount: testClinicReviews.length,
-    };
-    
-    return [testClinicWithData, ...realClinics];
-  }
-  
-  return realClinics;
-}
+// Mock data - Supabase'den gelecek
+const mockClinics: Clinic[] = [
+  {
+    id: '1',
+    name: 'Ağız ve Diş Sağlığı Merkezi',
+    address: 'Atatürk Cad. No:123 Daire:5',
+    city: 'İstanbul',
+    district: 'Kadıköy',
+    phone: '0216 123 45 67',
+    email: 'info@agizdis.com',
+    services: [
+      'Diş Taşı Temizliği (Detartraj)',
+      'Kompozit Dolgu',
+      'Tek Kök / Çok Kök Kanal',
+      'Tek İmplant',
+      'Metal–Seramik Teller',
+      'Zirkonyum Kron/Bridge',
+      'Hollywood Smile',
+    ],
+    doctors: [
+      {
+        id: '1',
+        name: 'Dr. Ahmet Yılmaz',
+        specialty: 'Ortodonti',
+        services: ['Metal–Seramik Teller', 'Şeffaf Plak/Invisalign', 'Çocuk Ortodontisi'],
+      },
+      {
+        id: '2',
+        name: 'Dr. Ayşe Demir',
+        specialty: 'Estetik Diş Hekimliği / Gülüş Tasarımı',
+        services: ['Hollywood Smile', 'Diş Beyazlatma (Ofis–Ev Tipi)', 'E-max Porselen / Laminate Veneer'],
+      },
+      {
+        id: '3',
+        name: 'Dr. Mehmet Kaya',
+        specialty: 'İmplantoloji',
+        services: ['Tek İmplant', 'All-on-4 / All-on-6 Sabit Protez', 'Kemik Artırma (GBR – Greftleme)'],
+      },
+    ],
+    workingHours: [
+      { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+      { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+      { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+      { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+      { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+    ],
+    rating: 4.8,
+    reviewCount: 127,
+  },
+  {
+    id: '2',
+    name: 'Modern Diş Kliniği',
+    address: 'Bağdat Cad. No:456',
+    city: 'İstanbul',
+    district: 'Bostancı',
+    phone: '0216 234 56 78',
+    email: 'info@moderndis.com',
+    services: ['Kompozit Dolgu', 'Tek Kök / Çok Kök Kanal', 'Tek İmplant'],
+    doctors: [
+      {
+        id: '4',
+        name: 'Dr. Zeynep Şahin',
+        specialty: 'Endodonti (Kanal Tedavisi)',
+        services: ['Tek Kök / Çok Kök Kanal', 'Mikroskop Destekli Kanal', 'Kanal Yenileme (Retreatment)'],
+      },
+    ],
+    workingHours: [
+      { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+      { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+      { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+      { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+      { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+    ],
+    rating: 4.6,
+    reviewCount: 89,
+  },
+  {
+    id: '3',
+    name: 'Gülümseme Diş Kliniği',
+    address: 'Tunalı Hilmi Cad. No:789',
+    city: 'Ankara',
+    district: 'Çankaya',
+    phone: '0312 345 67 89',
+    email: 'info@gulumseme.com',
+    services: ['Tek İmplant', 'Zirkonyum Kron/Bridge', 'Hollywood Smile'],
+    doctors: [
+      {
+        id: '5',
+        name: 'Dr. Can Özkan',
+        specialty: 'Restoratif Diş Tedavisi',
+        services: ['Kompozit Dolgu', 'Diş Taşı Temizliği (Detartraj)', 'Kırık Diş Onarımı'],
+      },
+    ],
+    workingHours: [
+      { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+      { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+      { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+      { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+      { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+    ],
+    rating: 4.9,
+    reviewCount: 203,
+  },
+];
 
 // Türkiye şehirleri ve ilçeleri
 const cities = ['İstanbul', 'Ankara', 'İzmir', 'Antalya', 'Bursa', 'Adana'];
@@ -227,7 +190,6 @@ const timeSlots = [
 export default function FindAppointmentPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [allClinics, setAllClinics] = useState<Clinic[]>([]);
   
   // Filtreler (hepsi opsiyonel)
   const [selectedCity, setSelectedCity] = useState('');
@@ -240,12 +202,6 @@ export default function FindAppointmentPage() {
   
   // Görünüm modu: 'clinic' veya 'doctor'
   const [viewMode, setViewMode] = useState<'clinic' | 'doctor'>('clinic');
-  
-  // Load real clinics data
-  useEffect(() => {
-    const clinics = loadRealClinics();
-    setAllClinics(clinics);
-  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -269,7 +225,7 @@ export default function FindAppointmentPage() {
   }, [selectedCity]);
 
   const availableServices = useMemo(() => {
-    let clinics = allClinics;
+    let clinics = mockClinics;
     
     // Şehir filtresi
     if (selectedCity) {
@@ -288,10 +244,10 @@ export default function FindAppointmentPage() {
     });
     
     return Array.from(services).sort();
-  }, [selectedCity, selectedDistricts, allClinics]);
+  }, [selectedCity, selectedDistricts]);
 
   const availableDoctors = useMemo(() => {
-    let clinics = allClinics;
+    let clinics = mockClinics;
     
     // Şehir filtresi
     if (selectedCity) {
@@ -324,11 +280,11 @@ export default function FindAppointmentPage() {
     });
     
     return Array.from(doctorsMap.values());
-  }, [selectedCity, selectedDistricts, selectedService, allClinics]);
+  }, [selectedCity, selectedDistricts, selectedService]);
 
   // Filtrelenmiş klinikler
   const filteredClinics = useMemo(() => {
-    let clinics = [...allClinics];
+    let clinics = [...mockClinics];
     
     // Şehir filtresi
     if (selectedCity) {
@@ -390,7 +346,7 @@ export default function FindAppointmentPage() {
     }
     
     return clinics;
-  }, [selectedCity, selectedDistricts, selectedService, selectedTime, timeRangeStart, timeRangeEnd, selectedDoctor, allClinics]);
+  }, [selectedCity, selectedDistricts, selectedService, selectedTime, timeRangeStart, timeRangeEnd, selectedDoctor]);
 
   // Filtrelenmiş doktorlar
   const filteredDoctors = useMemo(() => {

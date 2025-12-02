@@ -5,6 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
+import { getAppointmentById } from '@/lib/services/appointment-service';
+import { getPendingChangeRequests, approveChangeRequest, rejectChangeRequest } from '@/lib/services/appointment-change-request-service';
+import { getStaffById } from '@/lib/services/staff-service';
+import { supabase } from '@/lib/supabase';
+import ToastContainer, { showToast } from '@/components/Toast';
 import {
   Calendar,
   Clock,
@@ -49,47 +54,384 @@ interface Appointment {
   isUrgent?: boolean;
 }
 
-const APPOINTMENTS_STORAGE_KEY = 'randevudent_appointments';
-
-function getAllAppointments(): Appointment[] {
-  if (typeof window === 'undefined') return [];
-  const appointmentsJson = localStorage.getItem(APPOINTMENTS_STORAGE_KEY);
-  return appointmentsJson ? JSON.parse(appointmentsJson) : [];
-}
-
-function getAppointmentById(appointmentId: string): Appointment | null {
-  const appointments = getAllAppointments();
-  return appointments.find(apt => apt.id === appointmentId) || null;
-}
 
 export default function AppointmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [appointment, setAppointment] = useState<any>(null);
+  const [pendingChangeRequest, setPendingChangeRequest] = useState<any>(null);
+  const [newDoctorName, setNewDoctorName] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
+  const [changeRequestNotification, setChangeRequestNotification] = useState<any>(null);
+  const [statusUpdateNotification, setStatusUpdateNotification] = useState<any>(null);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const currentUser = await getCurrentUser();
-      if (!currentUser) {
-        router.push('/login');
-        return;
-      }
-      setUser(currentUser);
+  const loadData = async () => {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    setUser(currentUser);
 
-      const appointmentId = params?.id as string;
-      if (appointmentId) {
-        const foundAppointment = getAppointmentById(appointmentId);
-        if (!foundAppointment || foundAppointment.userId !== currentUser.id) {
+    const appointmentId = params?.id as string;
+    if (!appointmentId) {
+      router.push('/appointments');
+      return;
+    }
+
+    try {
+      // Fetch appointment from Supabase
+      const appointmentResult = await getAppointmentById(appointmentId);
+      if (!appointmentResult.success || !appointmentResult.appointment) {
+        showToast('Randevu bulunamadı', 'error');
         router.push('/appointments');
         return;
       }
-      setAppointment(foundAppointment);
+
+      const apt = appointmentResult.appointment;
+      
+      // Check if appointment belongs to user
+      if (apt.user_id !== currentUser.id) {
+        showToast('Bu randevu size ait değil', 'error');
+        router.push('/appointments');
+        return;
       }
-    };
-    checkAuth();
+
+      // Transform to match interface
+      setAppointment({
+        id: apt.id,
+        userId: apt.user_id,
+        clinicId: apt.clinic_id,
+        clinicName: apt.clinic_name,
+        clinicAddress: apt.clinic_address,
+        clinicPhone: apt.clinic_phone,
+        clinicEmail: apt.clinic_email,
+        doctorId: apt.doctor_id,
+        doctorName: apt.doctor_name,
+        service: apt.service,
+        date: apt.date,
+        time: apt.time,
+        notes: apt.notes,
+        complaint: apt.complaint,
+        status: apt.status,
+        price: apt.price,
+        paymentStatus: apt.payment_status,
+        createdAt: apt.created_at,
+        isUrgent: apt.is_urgent,
+      });
+
+      // Fetch pending change requests (from clinic)
+      const changeRequestsResult = await getPendingChangeRequests(appointmentId);
+      if (changeRequestsResult.success && changeRequestsResult.changeRequests) {
+        // Get the most recent pending request from clinic
+        const clinicRequest = changeRequestsResult.changeRequests.find(
+          (req: any) => req.requested_by_type === 'clinic'
+        );
+        if (clinicRequest) {
+          setPendingChangeRequest(clinicRequest);
+          
+          // Fetch doctor name if new_doctor_id exists
+          if (clinicRequest.new_doctor_id) {
+            const doctorResult = await getStaffById(clinicRequest.new_doctor_id);
+            if (doctorResult.success && doctorResult.staff) {
+              setNewDoctorName(doctorResult.staff.name);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading appointment:', error);
+      showToast('Randevu bilgileri yüklenirken bir hata oluştu', 'error');
+      router.push('/appointments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [params, router]);
+
+  // Play notification sound
+  const playNotificationSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 600;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.log('Could not play notification sound:', error);
+    }
+  };
+
+  // Realtime subscription for appointment changes
+  useEffect(() => {
+    const appointmentId = params?.id as string;
+    if (!appointmentId || !user) return;
+
+    const channel = supabase
+      .channel(`user-appointment-detail-${appointmentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointments',
+          filter: `id=eq.${appointmentId}`,
+        },
+        async (payload) => {
+          console.log('Appointment change detected:', payload);
+          const oldData = payload.old as any;
+          const newData = payload.new as any;
+          
+          // Reload appointment data
+          const appointmentResult = await getAppointmentById(appointmentId);
+          if (appointmentResult.success && appointmentResult.appointment) {
+            const apt = appointmentResult.appointment;
+            
+            // Check if appointment belongs to user
+            if (apt.user_id !== user.id) {
+              return;
+            }
+
+            // Check if status changed
+            if (oldData.status !== newData.status) {
+              playNotificationSound();
+              let message = '';
+              if (newData.status === 'confirmed') {
+                message = 'Randevunuz onaylandı!';
+              } else if (newData.status === 'cancelled') {
+                message = 'Randevunuz iptal edildi';
+              } else if (newData.status === 'completed') {
+                message = 'Randevunuz tamamlandı';
+              }
+              if (message) {
+                setStatusUpdateNotification({
+                  message,
+                  type: 'status_update',
+                  timestamp: Date.now(),
+                });
+                setTimeout(() => setStatusUpdateNotification(null), 5000);
+              }
+            }
+            
+            // Check if appointment was updated (date, time, doctor, service)
+            if (oldData.date !== newData.date || 
+                oldData.time !== newData.time || 
+                oldData.doctor_id !== newData.doctor_id ||
+                oldData.service !== newData.service) {
+              playNotificationSound();
+              setStatusUpdateNotification({
+                message: 'Randevunuz güncellendi!',
+                type: 'appointment_updated',
+                timestamp: Date.now(),
+              });
+              setTimeout(() => setStatusUpdateNotification(null), 5000);
+            }
+
+            // Transform to match interface
+            setAppointment({
+              id: apt.id,
+              userId: apt.user_id,
+              clinicId: apt.clinic_id,
+              clinicName: apt.clinic_name,
+              clinicAddress: apt.clinic_address,
+              clinicPhone: apt.clinic_phone,
+              clinicEmail: apt.clinic_email,
+              doctorId: apt.doctor_id,
+              doctorName: apt.doctor_name,
+              service: apt.service,
+              date: apt.date,
+              time: apt.time,
+              notes: apt.notes,
+              complaint: apt.complaint,
+              status: apt.status,
+              price: apt.price,
+              paymentStatus: apt.payment_status,
+              createdAt: apt.created_at,
+              isUrgent: apt.is_urgent,
+            });
+
+            // Reload change requests
+            const changeRequestsResult = await getPendingChangeRequests(appointmentId);
+            if (changeRequestsResult.success && changeRequestsResult.changeRequests) {
+              const clinicRequest = changeRequestsResult.changeRequests.find(
+                (req: any) => req.requested_by_type === 'clinic'
+              );
+              if (clinicRequest) {
+                setPendingChangeRequest(clinicRequest);
+                
+                // Fetch doctor name if new_doctor_id exists
+                if (clinicRequest.new_doctor_id) {
+                  const doctorResult = await getStaffById(clinicRequest.new_doctor_id);
+                  if (doctorResult.success && doctorResult.staff) {
+                    setNewDoctorName(doctorResult.staff.name);
+                  }
+                }
+              } else {
+                setPendingChangeRequest(null);
+                setNewDoctorName('');
+              }
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointment_change_requests',
+          filter: `appointment_id=eq.${appointmentId}`,
+        },
+        async (payload) => {
+          console.log('New change request detected:', payload);
+          const changeRequest = payload.new as any;
+          if (changeRequest.requested_by_type === 'clinic') {
+            playNotificationSound();
+            setChangeRequestNotification({
+              message: 'Klinik değişiklik talebi gönderdi!',
+              type: 'new_change_request',
+              timestamp: Date.now(),
+            });
+            setTimeout(() => setChangeRequestNotification(null), 5000);
+          }
+          
+          // Reload change requests
+          const changeRequestsResult = await getPendingChangeRequests(appointmentId);
+          if (changeRequestsResult.success && changeRequestsResult.changeRequests) {
+            const clinicRequest = changeRequestsResult.changeRequests.find(
+              (req: any) => req.requested_by_type === 'clinic'
+            );
+            if (clinicRequest) {
+              setPendingChangeRequest(clinicRequest);
+              
+              // Fetch doctor name if new_doctor_id exists
+              if (clinicRequest.new_doctor_id) {
+                const doctorResult = await getStaffById(clinicRequest.new_doctor_id);
+                if (doctorResult.success && doctorResult.staff) {
+                  setNewDoctorName(doctorResult.staff.name);
+                }
+              }
+            } else {
+              setPendingChangeRequest(null);
+              setNewDoctorName('');
+            }
+          } else {
+            setPendingChangeRequest(null);
+            setNewDoctorName('');
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointment_change_requests',
+          filter: `appointment_id=eq.${appointmentId}`,
+        },
+        async (payload) => {
+          console.log('Change request updated:', payload);
+          const oldData = payload.old as any;
+          const newData = payload.new as any;
+          
+          // If change request was approved, the appointment was already updated
+          if (oldData.status === 'pending' && newData.status === 'approved') {
+            playNotificationSound();
+            setStatusUpdateNotification({
+              message: 'Değişiklik talebiniz onaylandı!',
+              type: 'change_approved',
+              timestamp: Date.now(),
+            });
+            setTimeout(() => setStatusUpdateNotification(null), 5000);
+          }
+          
+          // Reload change requests
+          const changeRequestsResult = await getPendingChangeRequests(appointmentId);
+          if (changeRequestsResult.success && changeRequestsResult.changeRequests) {
+            const clinicRequest = changeRequestsResult.changeRequests.find(
+              (req: any) => req.requested_by_type === 'clinic'
+            );
+            if (clinicRequest) {
+              setPendingChangeRequest(clinicRequest);
+              
+              // Fetch doctor name if new_doctor_id exists
+              if (clinicRequest.new_doctor_id) {
+                const doctorResult = await getStaffById(clinicRequest.new_doctor_id);
+                if (doctorResult.success && doctorResult.staff) {
+                  setNewDoctorName(doctorResult.staff.name);
+                }
+              }
+            } else {
+              setPendingChangeRequest(null);
+              setNewDoctorName('');
+            }
+          } else {
+            setPendingChangeRequest(null);
+            setNewDoctorName('');
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [params, user]);
+
+  const handleApproveChangeRequest = async () => {
+    if (!pendingChangeRequest) return;
+
+    try {
+      const result = await approveChangeRequest(pendingChangeRequest.id);
+      if (result.success) {
+        showToast('Değişiklik talebi onaylandı', 'success');
+        await loadData(); // Reload data
+      } else {
+        showToast(result.error || 'Değişiklik talebi onaylanamadı', 'error');
+      }
+    } catch (error) {
+      console.error('Error approving change request:', error);
+      showToast('Değişiklik talebi onaylanırken bir hata oluştu', 'error');
+    }
+  };
+
+  const handleRejectChangeRequest = async () => {
+    if (!pendingChangeRequest) return;
+
+    if (!confirm('Değişiklik talebini reddetmek istediğinize emin misiniz?')) {
+      return;
+    }
+
+    try {
+      const result = await rejectChangeRequest(pendingChangeRequest.id);
+      if (result.success) {
+        showToast('Değişiklik talebi reddedildi', 'success');
+        setPendingChangeRequest(null);
+      } else {
+        showToast(result.error || 'Değişiklik talebi reddedilemedi', 'error');
+      }
+    } catch (error) {
+      console.error('Error rejecting change request:', error);
+      showToast('Değişiklik talebi reddedilirken bir hata oluştu', 'error');
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -154,7 +496,15 @@ export default function AppointmentDetailPage() {
     }
   };
 
-  if (!user || !appointment) {
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!appointment) {
     return null; // Will redirect
   }
 
@@ -186,6 +536,36 @@ export default function AppointmentDetailPage() {
             <ArrowLeft size={16} />
             Randevularıma Dön
           </Link>
+
+          {/* Notifications */}
+          {statusUpdateNotification && (
+            <div className="mb-4 animate-pulse bg-blue-500/20 border border-blue-500/50 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping" />
+                <span className="text-blue-400 font-light">{statusUpdateNotification.message}</span>
+              </div>
+              <button
+                onClick={() => setStatusUpdateNotification(null)}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {changeRequestNotification && (
+            <div className="mb-4 animate-pulse bg-yellow-500/20 border border-yellow-500/50 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping" />
+                <span className="text-yellow-400 font-light">{changeRequestNotification.message}</span>
+              </div>
+              <button
+                onClick={() => setChangeRequestNotification(null)}
+                className="text-yellow-400 hover:text-yellow-300"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
 
           {/* Header */}
           <div className="mb-8">
@@ -336,6 +716,69 @@ export default function AppointmentDetailPage() {
                 </div>
               )}
 
+              {/* Pending Change Request from Clinic */}
+              {pendingChangeRequest && appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+                <div className="bg-yellow-500/10 backdrop-blur border border-yellow-500/30 rounded-xl p-6">
+                  <h3 className="text-lg font-light mb-4 flex items-center gap-2 text-yellow-400">
+                    <AlertCircle size={20} />
+                    Bekleyen Değişiklik Talebi
+                  </h3>
+                  <p className="text-sm font-light text-slate-300 mb-4">
+                    Klinik randevunuzda değişiklik yapmak istiyor. Lütfen inceleyin ve onaylayın veya reddedin.
+                  </p>
+                  
+                  <div className="bg-slate-800/50 rounded-lg p-4 mb-4 space-y-2">
+                    {pendingChangeRequest.new_date && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-400 font-light">Yeni Tarih:</span>
+                        <span className="text-sm font-light">{new Date(pendingChangeRequest.new_date).toLocaleDateString('tr-TR')}</span>
+                      </div>
+                    )}
+                    {pendingChangeRequest.new_time && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-400 font-light">Yeni Saat:</span>
+                        <span className="text-sm font-light">{pendingChangeRequest.new_time.substring(0, 5)}</span>
+                      </div>
+                    )}
+                    {pendingChangeRequest.new_doctor_id && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-400 font-light">Yeni Hekim:</span>
+                        <span className="text-sm font-light">{newDoctorName || 'Yükleniyor...'}</span>
+                      </div>
+                    )}
+                    {pendingChangeRequest.new_service && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-400 font-light">Yeni Hizmet:</span>
+                        <span className="text-sm font-light">{pendingChangeRequest.new_service}</span>
+                      </div>
+                    )}
+                    {pendingChangeRequest.reason && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/50">
+                        <span className="text-sm text-slate-400 font-light">Neden: </span>
+                        <span className="text-sm font-light">{pendingChangeRequest.reason}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleApproveChangeRequest}
+                      className="flex-1 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 hover:border-green-400/50 text-green-400 rounded-lg transition font-light flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 size={16} />
+                      Onayla
+                    </button>
+                    <button
+                      onClick={handleRejectChangeRequest}
+                      className="flex-1 px-4 py-2 border border-slate-600/50 hover:border-red-400/50 hover:text-red-400 rounded-lg transition font-light flex items-center justify-center gap-2"
+                    >
+                      <X size={16} />
+                      Reddet
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Cancellation Reason */}
               {appointment.status === 'cancelled' && appointment.cancellationReason && (
                 <div className="bg-red-500/10 backdrop-blur border border-red-500/30 rounded-xl p-6">
@@ -469,6 +912,7 @@ export default function AppointmentDetailPage() {
           <Footer />
         </div>
       </div>
+      <ToastContainer />
     </div>
   );
 }

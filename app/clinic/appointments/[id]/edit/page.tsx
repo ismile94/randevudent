@@ -2,11 +2,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import Navigation from '@/components/Navigation';
+import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentClinic } from '@/lib/auth-clinic';
 import { getAppointmentById } from '@/lib/services/appointment-service';
-import { getClinicById } from '@/lib/services/clinic-service';
 import { getClinicStaff } from '@/lib/services/staff-service';
 import { createAppointmentChangeRequest } from '@/lib/services/appointment-change-request-service';
 import {
@@ -109,12 +108,11 @@ function getAvailableTimeSlots(date: string, workingHours: any[]): string[] {
   return slots;
 }
 
-export default function EditAppointmentPage() {
+export default function ClinicEditAppointmentPage() {
   const params = useParams();
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [appointment, setAppointment] = useState<any>(null);
   const [clinic, setClinic] = useState<any>(null);
+  const [appointment, setAppointment] = useState<any>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [allServices, setAllServices] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,16 +131,16 @@ export default function EditAppointmentPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      const currentUser = await getCurrentUser();
-      if (!currentUser) {
-        router.push('/login');
+      const currentClinic = getCurrentClinic();
+      if (!currentClinic) {
+        router.push('/clinic/login');
         return;
       }
-      setUser(currentUser);
+      setClinic(currentClinic);
 
       const appointmentId = params?.id as string;
       if (!appointmentId) {
-        router.push('/appointments');
+        router.push('/clinic/appointments');
         return;
       }
 
@@ -151,23 +149,23 @@ export default function EditAppointmentPage() {
         const appointmentResult = await getAppointmentById(appointmentId);
         if (!appointmentResult.success || !appointmentResult.appointment) {
           showToast('Randevu bulunamadı', 'error');
-          router.push('/appointments');
+          router.push('/clinic/appointments');
           return;
         }
 
         const apt = appointmentResult.appointment;
         
-        // Check if appointment belongs to user
-        if (apt.user_id !== currentUser.id) {
-          showToast('Bu randevu size ait değil', 'error');
-          router.push('/appointments');
+        // Check if appointment belongs to clinic
+        if (apt.clinic_id !== currentClinic.id) {
+          showToast('Bu randevu bu kliniğe ait değil', 'error');
+          router.push('/clinic/appointments');
           return;
         }
 
         // Check if appointment can be edited
         if (apt.status === 'cancelled' || apt.status === 'completed') {
           showToast('İptal edilmiş veya tamamlanmış randevular düzenlenemez', 'error');
-          router.push(`/appointments/${appointmentId}`);
+          router.push(`/clinic/appointments/${appointmentId}`);
           return;
         }
 
@@ -177,58 +175,47 @@ export default function EditAppointmentPage() {
         setSelectedDoctorId(apt.doctor_id || '');
         setSelectedService(apt.service);
 
-        // Fetch clinic data
-        const clinicResult = await getClinicById(apt.clinic_id);
-        if (clinicResult.success && clinicResult.clinic) {
-          const clinicData = clinicResult.clinic;
+        // Default working hours
+        const workingHours = [
+          { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+          { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+          { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+          { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+          { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+          { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+          { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+        ];
+
+        const dates = getAllAvailableDates(workingHours);
+        setAvailableDates(dates);
+
+        // Fetch staff/doctors
+        const staffResult = await getClinicStaff(apt.clinic_id);
+        if (staffResult.success && staffResult.staff) {
+          const doctorsData = staffResult.staff
+            .filter((s: any) => isDoctor(s))
+            .map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              specialty: Array.isArray(s.specialty) ? s.specialty.join(', ') : s.specialty || s.title,
+              services: s.services || [],
+            }));
           
-          // Default working hours (can be enhanced to fetch from clinic settings)
-          const workingHours = [
-            { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-            { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-            { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-            { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-            { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-            { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-            { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-          ];
+          setDoctors(doctorsData);
 
-          setClinic({
-            ...clinicData,
-            workingHours,
+          // Collect all services
+          const servicesSet = new Set<string>();
+          staffResult.staff.forEach((s: any) => {
+            if (s.services && Array.isArray(s.services)) {
+              s.services.forEach((service: string) => servicesSet.add(service));
+            }
           });
-
-          const dates = getAllAvailableDates(workingHours);
-          setAvailableDates(dates);
-
-          // Fetch staff/doctors
-          const staffResult = await getClinicStaff(apt.clinic_id);
-          if (staffResult.success && staffResult.staff) {
-            const doctorsData = staffResult.staff
-              .filter((s: any) => isDoctor(s))
-              .map((s: any) => ({
-                id: s.id,
-                name: s.name,
-                specialty: Array.isArray(s.specialty) ? s.specialty.join(', ') : s.specialty || s.title,
-                services: s.services || [],
-              }));
-            
-            setDoctors(doctorsData);
-
-            // Collect all services
-            const servicesSet = new Set<string>();
-            staffResult.staff.forEach((s: any) => {
-              if (s.services && Array.isArray(s.services)) {
-                s.services.forEach((service: string) => servicesSet.add(service));
-              }
-            });
-            setAllServices(Array.from(servicesSet));
-          }
+          setAllServices(Array.from(servicesSet));
         }
       } catch (error) {
         console.error('Error loading appointment data:', error);
         showToast('Randevu bilgileri yüklenirken bir hata oluştu', 'error');
-        router.push('/appointments');
+        router.push('/clinic/appointments');
       } finally {
         setLoading(false);
       }
@@ -239,7 +226,16 @@ export default function EditAppointmentPage() {
 
   useEffect(() => {
     if (selectedDate && clinic) {
-      const times = getAvailableTimeSlots(selectedDate, clinic.workingHours);
+      const workingHours = [
+        { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+        { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+        { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+        { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+        { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+        { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+        { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+      ];
+      const times = getAvailableTimeSlots(selectedDate, workingHours);
       setAvailableTimes(times);
       if (!times.includes(selectedTime)) {
         setSelectedTime('');
@@ -253,13 +249,11 @@ export default function EditAppointmentPage() {
       const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
       if (selectedDoctor && selectedDoctor.services && selectedDoctor.services.length > 0) {
         setAllServices(selectedDoctor.services);
-        // If current service is not in doctor's services, clear it
         if (!selectedDoctor.services.includes(selectedService)) {
           setSelectedService('');
         }
       }
     } else {
-      // If no doctor selected, show all services
       const allServicesSet = new Set<string>();
       doctors.forEach((d: any) => {
         if (d.services && Array.isArray(d.services)) {
@@ -273,7 +267,7 @@ export default function EditAppointmentPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!appointment || !user) return;
+    if (!appointment || !clinic) return;
 
     // Check if any changes were made
     const hasDateChange = selectedDate !== appointment.date;
@@ -297,8 +291,8 @@ export default function EditAppointmentPage() {
       // Create change request
       const changeRequestData: any = {
         appointment_id: appointment.id,
-        requested_by: user.id,
-        requested_by_type: 'user',
+        requested_by: clinic.id,
+        requested_by_type: 'clinic',
       };
 
       if (hasDateChange) changeRequestData.new_date = selectedDate;
@@ -310,9 +304,9 @@ export default function EditAppointmentPage() {
       const result = await createAppointmentChangeRequest(changeRequestData);
 
       if (result.success) {
-        showToast('Değişiklik talebi kliniğe gönderildi. Onay bekleniyor.', 'success');
+        showToast('Değişiklik talebi hastaya gönderildi. Onay bekleniyor.', 'success');
         setTimeout(() => {
-          router.push(`/appointments/${appointment.id}`);
+          router.push(`/clinic/appointments/${appointment.id}`);
         }, 1500);
       } else {
         showToast(result.error || 'Değişiklik talebi oluşturulamadı', 'error');
@@ -325,7 +319,7 @@ export default function EditAppointmentPage() {
     }
   };
 
-  if (loading || !user || !appointment || !clinic) {
+  if (loading || !clinic || !appointment) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
@@ -344,12 +338,12 @@ export default function EditAppointmentPage() {
       </div>
 
       <div className="relative z-10">
-        <Navigation />
+        <ClinicNavigation />
 
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-8">
           {/* Back Button */}
           <Link
-            href={`/appointments/${appointment.id}`}
+            href={`/clinic/appointments/${appointment.id}`}
             className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-blue-400 transition font-light mb-6"
           >
             <ArrowLeft size={16} />
@@ -360,7 +354,7 @@ export default function EditAppointmentPage() {
           <div className="mb-8">
             <h1 className="text-3xl md:text-4xl font-light mb-2">Randevu Değişiklik Talebi</h1>
             <p className="text-slate-400 font-light">
-              {clinic.clinic_name} için değişiklik talebi gönderin. Klinik onayladıktan sonra değişiklikler uygulanacaktır.
+              Randevu için değişiklik talebi gönderin. Hasta onayladıktan sonra değişiklikler uygulanacaktır.
             </p>
           </div>
 
@@ -583,7 +577,7 @@ export default function EditAppointmentPage() {
                 {isSubmitting ? 'Gönderiliyor...' : 'Değişiklik Talebi Gönder'}
               </button>
               <Link
-                href={`/appointments/${appointment.id}`}
+                href={`/clinic/appointments/${appointment.id}`}
                 className="px-6 py-3 border border-slate-600/50 hover:border-red-400/50 hover:text-red-400 rounded-lg transition font-light"
               >
                 İptal
@@ -599,3 +593,4 @@ export default function EditAppointmentPage() {
     </div>
   );
 }
+

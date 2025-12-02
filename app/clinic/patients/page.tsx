@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ClinicNavigation from '@/components/ClinicNavigation';
 import Footer from '@/components/Footer';
-import { getCurrentClinic } from '@/lib/auth-clinic';
-import { getClinicPatients } from '@/lib/patients';
-import { subscribeToEvents } from '@/lib/events';
+import { getCurrentClinicWithUUID } from '@/lib/utils/clinic-utils';
+import { getClinicPatients } from '@/lib/services/patient-service';
 import {
   Users,
   Search,
@@ -27,49 +26,36 @@ export default function ClinicPatientsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterDate, setFilterDate] = useState<'all' | 'recent' | 'old'>('all');
 
-  const loadData = () => {
-    const currentClinic = getCurrentClinic();
-    if (!currentClinic) {
-      router.push('/clinic/login');
-      return;
+  useEffect(() => {
+    const loadClinic = async () => {
+      const clinicData = await getCurrentClinicWithUUID();
+      if (!clinicData) {
+        router.push('/clinic/login');
+        return;
+      }
+      setClinic(clinicData.clinic);
+      loadPatients(clinicData.clinicId);
+    };
+    loadClinic();
+  }, [router, filterDate]);
+
+  const loadPatients = async (clinicId: string) => {
+    try {
+      const result = await getClinicPatients(clinicId, {
+        dateFilter: filterDate === 'all' ? undefined : filterDate,
+        search: searchQuery || undefined,
+      });
+
+      if (result.success && result.patients) {
+        setPatients(result.patients);
+      }
+    } catch (error: any) {
+      console.error('Error loading patients:', error);
     }
-    setClinic(currentClinic);
-    
-    const clinicPatients = getClinicPatients(currentClinic.id);
-    setPatients(clinicPatients);
   };
 
-  useEffect(() => {
-    loadData();
-
-    // Subscribe to real-time updates
-    const unsubscribe = subscribeToEvents((eventData) => {
-      if (
-        eventData.type === 'patient:created' ||
-        eventData.type === 'patient:updated' ||
-        eventData.type === 'appointment:created' ||
-        eventData.type === 'appointment:updated'
-      ) {
-        loadData();
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [router]);
-
-  const filteredPatients = patients.filter(patient => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        patient.name.toLowerCase().includes(query) ||
-        patient.phone.includes(query) ||
-        patient.email.toLowerCase().includes(query)
-      );
-    }
-    return true;
-  });
+  // Search is handled by the service, but we can add client-side filtering if needed
+  const filteredPatients = patients;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

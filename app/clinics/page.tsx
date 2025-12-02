@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import { getAllClinics, getCurrentClinic } from '@/lib/auth-clinic';
-import { getClinicReviews, calculateAverageRating } from '@/lib/reviews';
-import { getClinicStaff } from '@/lib/staff';
+import { getAllClinics } from '@/lib/services/clinic-service';
+import { getClinicStaff } from '@/lib/services/staff-service';
 import { Search, MapPin, Star, Clock, Filter, SlidersHorizontal, ArrowRight, Navigation2, Shield, CreditCard, Baby, Accessibility, Car, Building2, X, ChevronDown, ArrowUpDown } from 'lucide-react';
 
 interface Clinic {
@@ -31,145 +30,6 @@ interface Clinic {
   weekendHours?: boolean;
 }
 
-// Mock test clinic - always available for patients
-const mockTestClinic: Clinic = {
-  id: 'clinic-1',
-  name: 'Ağız ve Diş Sağlığı Merkezi',
-  address: 'Atatürk Cad. No:123',
-  city: 'İstanbul',
-  district: 'Kadıköy',
-  rating: 0,
-  reviewCount: 0,
-  services: [],
-  verified: true,
-  latitude: 40.9887,
-  longitude: 29.0234,
-  acceptsInsurance: true,
-  hasParking: true,
-  wheelchairAccessible: true,
-  childFriendly: true,
-  emergencyAppointments: true,
-  eveningHours: true,
-  weekendHours: true,
-};
-
-// Helper function to load real clinics data
-function loadRealClinics(): Clinic[] {
-  const clinics = getAllClinics();
-  const currentClinic = getCurrentClinic();
-  
-  // Include current clinic if logged in
-  const allClinics = [...clinics];
-  if (currentClinic && !allClinics.find(c => c.id === currentClinic.id)) {
-    allClinics.push(currentClinic);
-  }
-  
-  // Only show approved clinics
-  const approvedClinics = allClinics.filter(c => c.status === 'approved');
-  
-  // Transform to Clinic interface with real data
-  const realClinics = approvedClinics.map(clinic => {
-    const reviews = getClinicReviews(clinic.id);
-    const staff = getClinicStaff(clinic.id);
-    
-    // Collect services from staff
-    const allServices = new Set<string>();
-    staff.forEach(s => {
-      if (s.services) {
-        s.services.forEach((service: string) => allServices.add(service));
-      }
-    });
-    
-    // Calculate rating from reviews
-    const rating = reviews.length > 0 ? calculateAverageRating(reviews) : 0;
-    
-    // Check working hours for evening/weekend
-    const workingHours = clinic.workingHours || [];
-    const hasEveningHours = workingHours.some(wh => {
-      if (wh.closed) return false;
-      const [openHour] = wh.open.split(':').map(Number);
-      const [closeHour] = wh.close.split(':').map(Number);
-      return closeHour >= 18; // After 6 PM
-    });
-    const hasWeekendHours = workingHours.some(wh => {
-      const weekendDays = ['Cumartesi', 'Pazar'];
-      return weekendDays.includes(wh.day) && !wh.closed;
-    });
-    
-    return {
-      id: clinic.id,
-      name: clinic.clinicName,
-      address: clinic.address,
-      city: clinic.city,
-      district: clinic.district,
-      rating,
-      reviewCount: reviews.length,
-      services: Array.from(allServices),
-      verified: clinic.verified || false,
-      latitude: clinic.latitude,
-      longitude: clinic.longitude,
-      acceptsInsurance: !!(clinic.acceptedInsurances && clinic.acceptedInsurances.length > 0),
-      hasParking: !!(clinic.parkingInfo && clinic.parkingInfo.length > 0),
-      wheelchairAccessible: !!(clinic.accessibility?.wheelchairAccessible),
-      childFriendly: !!(clinic.specialties?.some(s => s.toLowerCase().includes('çocuk') || s.toLowerCase().includes('pedodonti'))),
-      emergencyAppointments: !!clinic.emergencyContact,
-      eveningHours: hasEveningHours,
-      weekendHours: hasWeekendHours,
-    };
-  });
-  
-  // Add mock test clinic if not already in the list
-  const hasTestClinic = realClinics.find(c => c.id === 'clinic-1');
-  if (!hasTestClinic) {
-    // Load real data for test clinic
-    const testClinicStaff = getClinicStaff('clinic-1');
-    const testClinicReviews = getClinicReviews('clinic-1');
-    
-    // Collect services from staff
-    const testClinicServices = new Set<string>();
-    testClinicStaff.forEach(s => {
-      if (s.services) {
-        s.services.forEach((service: string) => testClinicServices.add(service));
-      }
-    });
-    
-    // Calculate rating from reviews
-    const testClinicRating = testClinicReviews.length > 0 ? calculateAverageRating(testClinicReviews) : 0;
-    
-    // Check working hours for evening/weekend
-    const testClinicWorkingHours = [
-      { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-      { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-      { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-      { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-      { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-      { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-      { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-    ];
-    const hasEveningHours = testClinicWorkingHours.some(wh => {
-      if (wh.closed) return false;
-      const [closeHour] = wh.close.split(':').map(Number);
-      return closeHour >= 18;
-    });
-    const hasWeekendHours = testClinicWorkingHours.some(wh => {
-      const weekendDays = ['Cumartesi', 'Pazar'];
-      return weekendDays.includes(wh.day) && !wh.closed;
-    });
-    
-    const testClinicWithData: Clinic = {
-      ...mockTestClinic,
-      services: Array.from(testClinicServices),
-      rating: testClinicRating,
-      reviewCount: testClinicReviews.length,
-      eveningHours: hasEveningHours,
-      weekendHours: hasWeekendHours,
-    };
-    
-    return [testClinicWithData, ...realClinics];
-  }
-  
-  return realClinics;
-}
 
 // Mesafe hesaplama fonksiyonu (Haversine formülü)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -196,6 +56,7 @@ function ClinicsPageContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [filteredClinics, setFilteredClinics] = useState<Clinic[]>([]);
   const [allClinics, setAllClinics] = useState<Clinic[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Yeni filtreler
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
@@ -209,11 +70,62 @@ function ClinicsPageContent() {
   const [eveningHours, setEveningHours] = useState(false);
   const [weekendHours, setWeekendHours] = useState(false);
 
-  // Load real clinics data
+  // Klinikleri Supabase'den yükle
   useEffect(() => {
-    const clinics = loadRealClinics();
-    setAllClinics(clinics);
-    setFilteredClinics(clinics);
+    const loadClinics = async () => {
+      try {
+        setLoading(true);
+        const result = await getAllClinics({ status: 'approved' });
+        
+        if (result.success && result.clinics) {
+          // Her klinik için staff'ten servisleri topla
+          const clinicsWithServices = await Promise.all(
+            result.clinics.map(async (clinic) => {
+              const staffResult = await getClinicStaff(clinic.id);
+              const staff = staffResult.success && staffResult.staff ? staffResult.staff : [];
+              
+              // Tüm servisleri topla
+              const allServices = new Set<string>();
+              staff.forEach((s: any) => {
+                if (s.services && Array.isArray(s.services)) {
+                  s.services.forEach((service: string) => allServices.add(service));
+                }
+              });
+
+              return {
+                id: clinic.id,
+                name: clinic.clinic_name,
+                address: clinic.address,
+                city: clinic.city,
+                district: clinic.district,
+                rating: 4.5, // TODO: Calculate from reviews
+                reviewCount: 0, // TODO: Get from reviews
+                services: Array.from(allServices),
+                verified: clinic.verified,
+                latitude: undefined, // TODO: Add to database
+                longitude: undefined, // TODO: Add to database
+                acceptsInsurance: true, // TODO: Add to database
+                hasParking: true, // TODO: Add to database
+                wheelchairAccessible: true, // TODO: Add to database
+                childFriendly: true, // TODO: Add to database
+                emergencyAppointments: true, // TODO: Add to database
+                eveningHours: true, // TODO: Add to database
+                weekendHours: true, // TODO: Add to database
+              } as Clinic;
+            })
+          );
+          
+          setAllClinics(clinicsWithServices);
+          setFilteredClinics(clinicsWithServices);
+        }
+      } catch (error) {
+        console.error('Error loading clinics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadClinics();
   }, []);
 
   // Kullanıcı konumunu al
@@ -394,11 +306,9 @@ function ClinicsPageContent() {
 
   // Filtreleme fonksiyonu - her filtre değiştiğinde otomatik çalışır
   useEffect(() => {
-    if (allClinics.length > 0) {
-      handleSearch();
-    }
+    handleSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCities, selectedServices, searchCity, searchService, minRating, onlyVerified, acceptsInsurance, hasParking, wheelchairAccessible, childFriendly, emergencyAppointments, eveningHours, weekendHours, sortBy, userLocation, allClinics]);
+  }, [selectedCities, selectedServices, searchCity, searchService, minRating, onlyVerified, acceptsInsurance, hasParking, wheelchairAccessible, childFriendly, emergencyAppointments, eveningHours, weekendHours, sortBy, userLocation]);
 
   const clearFilters = () => {
     setSearchCity('');
@@ -817,12 +727,18 @@ function ClinicsPageContent() {
 
           {/* Results */}
           <div className="max-w-7xl mx-auto">
-            <div className="mb-4 text-sm text-slate-400 font-light">
-              {filteredClinics.length} klinik bulundu
-            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 text-sm text-slate-400 font-light">
+                  {filteredClinics.length} klinik bulundu
+                </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredClinics.map((clinic) => (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredClinics.map((clinic) => (
                 <Link
                   key={clinic.id}
                   href={`/clinics/${clinic.id}`}
@@ -886,21 +802,23 @@ function ClinicsPageContent() {
                     <ArrowRight size={16} />
                   </div>
                 </Link>
-              ))}
-            </div>
+                  ))}
+                </div>
 
-            {filteredClinics.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-slate-400 font-light mb-4">
-                  Aradığınız kriterlere uygun klinik bulunamadı.
-                </p>
-                <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 text-sm border border-slate-600/50 hover:border-blue-400/50 hover:text-blue-400 rounded-lg transition font-light"
-                >
-                  Filtreleri Temizle
-                </button>
-              </div>
+                {filteredClinics.length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400 font-light mb-4">
+                      Aradığınız kriterlere uygun klinik bulunamadı.
+                    </p>
+                    <button
+                      onClick={clearFilters}
+                      className="px-4 py-2 text-sm border border-slate-600/50 hover:border-blue-400/50 hover:text-blue-400 rounded-lg transition font-light"
+                    >
+                      Filtreleri Temizle
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

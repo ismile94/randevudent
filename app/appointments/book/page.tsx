@@ -6,8 +6,8 @@ import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
 import { getAllClinics, getCurrentClinic } from '@/lib/auth-clinic';
-import { getClinicStaff } from '@/lib/staff';
-import { getAllAppointments } from '@/lib/appointments';
+import { getClinicById } from '@/lib/services/clinic-service';
+import { getClinicStaff } from '@/lib/services/staff-service';
 import {
   Calendar,
   Clock,
@@ -66,13 +66,20 @@ function isDoctor(staff: any): boolean {
 
 const APPOINTMENTS_STORAGE_KEY = 'randevudent_appointments';
 
-// This function is kept for backward compatibility but should use createAppointment from lib/appointments.ts
+function getAllAppointments(): Appointment[] {
+  if (typeof window === 'undefined') return [];
+  const appointmentsJson = localStorage.getItem(APPOINTMENTS_STORAGE_KEY);
+  return appointmentsJson ? JSON.parse(appointmentsJson) : [];
+}
+
+// This function is kept for backward compatibility but should use createAppointment from lib/services/appointment-service.ts
 function saveAppointment(appointment: Appointment): void {
   if (typeof window === 'undefined') return;
   const appointments = getAllAppointments();
   appointments.push(appointment);
   localStorage.setItem(APPOINTMENTS_STORAGE_KEY, JSON.stringify(appointments));
 }
+
 
 function getDayNameInTurkish(dateString: string): string {
   const date = new Date(dateString);
@@ -180,7 +187,7 @@ function getAvailableTimeSlots(day: string, workingHours: any[], existingAppoint
 function BookAppointmentPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const clinicId = searchParams?.get('clinicId') || '1';
+  const clinicId = searchParams?.get('clinicId');
   const doctorIdParam = searchParams?.get('doctorId') || '';
   const serviceParam = searchParams?.get('service') || '';
   const timeParam = searchParams?.get('time') || '';
@@ -206,63 +213,66 @@ function BookAppointmentPageContent() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    const loadClinicData = () => {
+    const loadClinicData = async () => {
+      if (!clinicId) {
+        console.error('Clinic ID is required');
+        router.push('/clinics');
+        return;
+      }
+      
       try {
-        // Get clinic data
-        const clinics = getAllClinics();
-        let foundClinic = clinics.find(c => c.id === clinicId);
+        // Try to get clinic from Supabase first
+        const clinicResult = await getClinicById(clinicId);
+        let foundClinic: any = null;
         
-        // If not found, check current clinic (for test clinic)
-        if (!foundClinic) {
-          const currentClinic = getCurrentClinic();
-          if (currentClinic && currentClinic.id === clinicId) {
-            foundClinic = currentClinic;
+        if (clinicResult.success && clinicResult.clinic) {
+          // Convert Supabase clinic format to local format
+          const clinic = clinicResult.clinic;
+          foundClinic = {
+            id: clinic.id,
+            clinicName: clinic.clinic_name,
+            taxNumber: clinic.tax_number,
+            tradeRegistryNumber: clinic.trade_registry_number,
+            address: clinic.address,
+            district: clinic.district,
+            city: clinic.city,
+            postalCode: clinic.postal_code,
+            phone: clinic.phone,
+            email: clinic.email,
+            website: clinic.website,
+            authorizedPersonName: clinic.authorized_person_name,
+            authorizedPersonTC: clinic.authorized_person_tc,
+            authorizedPersonPhone: clinic.authorized_person_phone,
+            authorizedPersonEmail: clinic.authorized_person_email,
+            authorizedPersonTitle: clinic.authorized_person_title,
+            status: clinic.status,
+            createdAt: clinic.created_at,
+            verified: clinic.verified,
+          };
+        } else {
+          // Fallback to localStorage (for backward compatibility)
+          const clinics = getAllClinics();
+          foundClinic = clinics.find(c => c.id === clinicId);
+          
+          if (!foundClinic) {
+            const currentClinic = getCurrentClinic();
+            if (currentClinic && currentClinic.id === clinicId) {
+              foundClinic = currentClinic;
+            }
           }
         }
         
-        // If still not found and it's test clinic, create mock clinic
-        if (!foundClinic && (clinicId === 'clinic-1' || clinicId === '1')) {
-          foundClinic = {
-            id: 'clinic-1',
-            clinicName: 'Ağız ve Diş Sağlığı Merkezi',
-            taxNumber: '1234567890',
-            tradeRegistryNumber: 'TR-12345',
-            address: 'Atatürk Cad. No:123 Daire:5',
-            district: 'Kadıköy',
-            city: 'İstanbul',
-            postalCode: '34700',
-            phone: '0216 123 45 67',
-            email: 'test@klinik.com',
-            password: 'test123',
-            authorizedPersonName: 'Dr. Ahmet Yılmaz',
-            authorizedPersonTC: '12345678901',
-            authorizedPersonPhone: '0555 123 45 67',
-            authorizedPersonEmail: 'ahmet@klinik.com',
-            authorizedPersonTitle: 'Klinik Müdürü',
-            status: 'approved' as const,
-            createdAt: new Date().toISOString(),
-            verified: true,
-            workingHours: [
-              { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-              { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-              { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-              { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-              { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-              { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-              { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-            ],
-          };
-        }
-        
         if (foundClinic) {
-          // Get real staff and filter for doctors only
-          const staff = getClinicStaff(clinicId);
+          // Get real staff from Supabase and filter for doctors only
+          const staffResult = await getClinicStaff(clinicId);
+          const staff = staffResult.success && staffResult.staff ? staffResult.staff : [];
+          
           const doctorsData = staff
-            .filter(isDoctor)
-            .map(s => ({
+            .filter((s: any) => isDoctor(s))
+            .map((s: any) => ({
               id: s.id,
               name: s.name,
-              specialty: s.specialty || s.title,
+              specialty: Array.isArray(s.specialty) ? s.specialty.join(', ') : s.specialty || s.title,
               services: s.services || [],
             }));
           
@@ -270,8 +280,8 @@ function BookAppointmentPageContent() {
           
           // Collect all services from staff
           const allServices = new Set<string>();
-          staff.forEach(s => {
-            if (s.services) {
+          staff.forEach((s: any) => {
+            if (s.services && Array.isArray(s.services)) {
               s.services.forEach((service: string) => allServices.add(service));
             }
           });
@@ -286,7 +296,7 @@ function BookAppointmentPageContent() {
             email: foundClinic.email,
             services: Array.from(allServices),
             doctors: doctorsData,
-            workingHours: foundClinic.workingHours || [
+            workingHours: [
               { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
               { day: 'Salı', open: '09:00', close: '18:00', closed: false },
               { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
@@ -294,7 +304,7 @@ function BookAppointmentPageContent() {
               { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
               { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
               { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-            ],
+            ] as any,
           });
         } else {
           // Clinic not found - show error
@@ -449,21 +459,33 @@ function BookAppointmentPageContent() {
       createdAt: new Date().toISOString(),
     };
 
-    setTimeout(async () => {
-      // Use the new appointment management system
-      const { createAppointment } = await import('@/lib/appointments');
-      const { createOrUpdatePatientFromAppointment } = await import('@/lib/patients');
+    try {
+      // Use the new appointment service
+      const { createAppointment } = await import('@/lib/services/appointment-service');
       
-      const result = createAppointment(newAppointment);
+      const result = await createAppointment({
+        user_id: user.id,
+        clinic_id: clinic.id,
+        clinic_name: clinic.name,
+        clinic_address: `${clinic.address}, ${clinic.district}, ${clinic.city}`,
+        clinic_phone: clinic.phone,
+        clinic_email: clinic.email,
+        doctor_id: formData.doctorId || undefined,
+        doctor_name: selectedDoctor?.name || undefined,
+        service: formData.service,
+        date: formData.date,
+        time: formData.time,
+        notes: formData.notes.trim() || undefined,
+        complaint: formData.complaint.trim() || undefined,
+        status: 'pending',
+        price: price > 0 ? price : undefined,
+        payment_status: price > 0 ? 'pending' : undefined,
+        is_urgent: formData.isUrgent,
+      });
       
       if (result.success) {
-        // Create or update patient record for clinic
-        createOrUpdatePatientFromAppointment(clinic.id, user.id, {
-          patientName: user.name,
-          patientPhone: user.phone,
-          patientEmail: user.email,
-          appointmentDate: formData.date,
-        });
+        // LocalStorage'a da kaydet (backward compatibility)
+        saveAppointment(newAppointment);
         
         setIsSubmitting(false);
         showToast('Randevunuz başarıyla oluşturuldu!', 'success');
@@ -474,7 +496,11 @@ function BookAppointmentPageContent() {
         setIsSubmitting(false);
         showToast(result.error || 'Randevu oluşturulamadı', 'error');
       }
-    }, 500);
+    } catch (error: any) {
+      console.error('Error creating appointment:', error);
+      setIsSubmitting(false);
+      showToast('Randevu oluşturulurken bir hata oluştu', 'error');
+    }
   };
 
   const updateFormData = (field: string, value: string | boolean) => {

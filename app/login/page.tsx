@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { LogIn, Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { loginUser } from '@/lib/auth';
 import { loginClinic, getAllClinics } from '@/lib/auth-clinic';
-import { initializeMockClinicData } from '@/lib/mock-data-clinic';
 
 interface Toast {
   id: string;
@@ -104,39 +103,50 @@ function LoginPageContent() {
       // If patient login failed, try clinic login
       // Check if it's test clinic
       if (formData.email === 'test@klinik.com' && formData.password === 'test123') {
-        const mockClinic = {
-          id: 'clinic-1',
-          clinicName: 'Ağız ve Diş Sağlığı Merkezi',
-          taxNumber: '1234567890',
-          tradeRegistryNumber: 'TR-12345',
-          phone: '0216 123 45 67',
-          email: 'test@klinik.com',
-          password: 'test123',
-          website: 'https://www.agizdis.com',
-          address: 'Atatürk Cad. No:123 Daire:5',
-          district: 'Kadıköy',
-          city: 'İstanbul',
-          postalCode: '34700',
-          authorizedPersonName: 'Dr. Ahmet Yılmaz',
-          authorizedPersonTC: '12345678901',
-          authorizedPersonPhone: '0555 123 45 67',
-          authorizedPersonEmail: 'ahmet@klinik.com',
-          authorizedPersonTitle: 'Klinik Müdürü',
-          status: 'approved' as const,
-          createdAt: new Date().toISOString(),
-          verified: true,
-        };
+        // Try to get real clinic from Supabase
+        const { getClinicByEmail } = await import('@/lib/services/clinic-service');
+        const clinicResult = await getClinicByEmail('test@klinik.com');
         
-        localStorage.setItem('randevudent_current_clinic', JSON.stringify(mockClinic));
-        initializeMockClinicData(mockClinic.id);
-        
-        setIsSubmitting(false);
-        showToast('Klinik girişi başarılı! Yönlendiriliyorsunuz...', 'success');
-        setTimeout(() => {
-          router.push('/clinic/dashboard');
-          router.refresh();
-        }, 1500);
-        return;
+        if (clinicResult.success && clinicResult.clinic) {
+          // Real clinic found in Supabase
+          const clinic = clinicResult.clinic;
+          const clinicData = {
+            id: clinic.id,
+            clinicName: clinic.clinic_name,
+            taxNumber: clinic.tax_number,
+            tradeRegistryNumber: clinic.trade_registry_number,
+            phone: clinic.phone,
+            email: clinic.email,
+            password: 'test123', // Not stored in Supabase, just for compatibility
+            website: clinic.website,
+            address: clinic.address,
+            district: clinic.district,
+            city: clinic.city,
+            postalCode: clinic.postal_code,
+            authorizedPersonName: clinic.authorized_person_name,
+            authorizedPersonTC: clinic.authorized_person_tc,
+            authorizedPersonPhone: clinic.authorized_person_phone,
+            authorizedPersonEmail: clinic.authorized_person_email,
+            authorizedPersonTitle: clinic.authorized_person_title,
+            status: clinic.status,
+            createdAt: clinic.created_at,
+            verified: clinic.verified,
+          };
+          
+          localStorage.setItem('randevudent_current_clinic', JSON.stringify(clinicData));
+          setIsSubmitting(false);
+          showToast('Klinik girişi başarılı! Yönlendiriliyorsunuz...', 'success');
+          setTimeout(() => {
+            router.push('/clinic/dashboard');
+            router.refresh();
+          }, 1500);
+          return;
+        } else {
+          // Clinic not found in Supabase, show error
+          setIsSubmitting(false);
+          showToast('Test klinik Supabase\'de bulunamadı. Lütfen önce klinik kaydı oluşturun.', 'error');
+          return;
+        }
       }
       
       // Try regular clinic login
