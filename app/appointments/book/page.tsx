@@ -57,6 +57,7 @@ function isDoctor(staff: any): boolean {
   );
 }
 
+const APPOINTMENTS_STORAGE_KEY = 'randevudent_appointments';
 
 // This function is kept for backward compatibility but should use createAppointment from lib/appointments.ts
 function saveAppointment(appointment: Appointment): void {
