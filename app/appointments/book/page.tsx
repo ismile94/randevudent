@@ -837,24 +837,27 @@ function BookAppointmentPageContent() {
                   )}
 
                   {/* Submit Button */}
-                  {formData.date && formData.time && formData.service && (
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Randevu oluşturuluyor...
-                        </>
-                      ) : (
-                        <>
-                          Randevu Oluştur
-                          <CheckCircle2 size={18} />
-                        </>
-                      )}
-                    </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !formData.date || !formData.time || !formData.service}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-lg font-light transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Randevu oluşturuluyor...
+                      </>
+                    ) : (
+                      <>
+                        Randevu Al
+                        <CheckCircle2 size={18} />
+                      </>
+                    )}
+                  </button>
+                  {(!formData.date || !formData.time || !formData.service) && (
+                    <p className="text-xs text-slate-400 font-light text-center mt-2">
+                      Randevu oluşturmak için lütfen hizmet, tarih ve saat seçiniz.
+                    </p>
                   )}
                 </form>
               </div>
