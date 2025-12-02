@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { getCurrentUser } from '@/lib/auth';
+import { getAllClinics, getCurrentClinic } from '@/lib/auth-clinic';
+import { getClinicStaff } from '@/lib/staff';
+import { getAllAppointments } from '@/lib/appointments';
 import {
   Calendar,
   Clock,
@@ -42,120 +45,18 @@ interface Appointment {
   createdAt: string;
 }
 
-// Mock clinic data - Supabase'den gelecek
-const mockClinics: Record<string, any> = {
-  '1': {
-    id: '1',
-    name: 'Ağız ve Diş Sağlığı Merkezi',
-    address: 'Atatürk Cad. No:123 Daire:5',
-    city: 'İstanbul',
-    district: 'Kadıköy',
-    phone: '0216 123 45 67',
-    email: 'info@agizdis.com',
-    services: [
-      'Diş Taşı Temizliği (Detartraj)',
-      'Kompozit Dolgu',
-      'Tek Kök / Çok Kök Kanal',
-      'Tek İmplant',
-      'Metal–Seramik Teller',
-      'Zirkonyum Kron/Bridge',
-      'Hollywood Smile',
-    ],
-    doctors: [
-      {
-        id: '1',
-        name: 'Dr. Ahmet Yılmaz',
-        specialty: 'Ortodonti',
-        services: ['Metal–Seramik Teller', 'Şeffaf Plak/Invisalign', 'Çocuk Ortodontisi'],
-      },
-      {
-        id: '2',
-        name: 'Dr. Ayşe Demir',
-        specialty: 'Estetik Diş Hekimliği / Gülüş Tasarımı',
-        services: ['Hollywood Smile', 'Diş Beyazlatma (Ofis–Ev Tipi)', 'E-max Porselen / Laminate Veneer'],
-      },
-      {
-        id: '3',
-        name: 'Dr. Mehmet Kaya',
-        specialty: 'İmplantoloji',
-        services: ['Tek İmplant', 'All-on-4 / All-on-6 Sabit Protez', 'Kemik Artırma (GBR – Greftleme)'],
-      },
-    ],
-    // 7 gün çalışan ve akşam 21:00'e kadar açık olan klinik örneği
-    workingHours: [
-      { day: 'Pazartesi', open: '09:00', close: '21:00', closed: false },
-      { day: 'Salı', open: '09:00', close: '21:00', closed: false },
-      { day: 'Çarşamba', open: '09:00', close: '21:00', closed: false },
-      { day: 'Perşembe', open: '09:00', close: '21:00', closed: false },
-      { day: 'Cuma', open: '09:00', close: '21:00', closed: false },
-      { day: 'Cumartesi', open: '09:00', close: '21:00', closed: false },
-      { day: 'Pazar', open: '09:00', close: '21:00', closed: false },
-    ],
-  },
-  '2': {
-    id: '2',
-    name: 'Modern Diş Kliniği',
-    address: 'Bağdat Cad. No:456',
-    city: 'İstanbul',
-    district: 'Bostancı',
-    phone: '0216 234 56 78',
-    email: 'info@moderndis.com',
-    services: ['Kompozit Dolgu', 'Tek Kök / Çok Kök Kanal', 'Tek İmplant'],
-    doctors: [
-      {
-        id: '4',
-        name: 'Dr. Zeynep Şahin',
-        specialty: 'Endodonti (Kanal Tedavisi)',
-        services: ['Tek Kök / Çok Kök Kanal', 'Mikroskop Destekli Kanal', 'Kanal Yenileme (Retreatment)'],
-      },
-    ],
-    workingHours: [
-      { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
-      { day: 'Salı', open: '09:00', close: '18:00', closed: false },
-      { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
-      { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
-      { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
-      { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
-      { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
-    ],
-  },
-  '3': {
-    id: '3',
-    name: 'Gülümseme Diş Kliniği',
-    address: 'Tunalı Hilmi Cad. No:789',
-    city: 'Ankara',
-    district: 'Çankaya',
-    phone: '0312 345 67 89',
-    email: 'info@gulumseme.com',
-    services: ['Tek İmplant', 'Zirkonyum Kron/Bridge', 'Hollywood Smile'],
-    doctors: [
-      {
-        id: '5',
-        name: 'Dr. Can Özkan',
-        specialty: 'Restoratif Diş Tedavisi',
-        services: ['Kompozit Dolgu', 'Diş Taşı Temizliği (Detartraj)', 'Kırık Diş Onarımı'],
-      },
-    ],
-    // 7 gün çalışan ve akşam 21:00'e kadar açık olan klinik örneği
-    workingHours: [
-      { day: 'Pazartesi', open: '09:00', close: '21:00', closed: false },
-      { day: 'Salı', open: '09:00', close: '21:00', closed: false },
-      { day: 'Çarşamba', open: '09:00', close: '21:00', closed: false },
-      { day: 'Perşembe', open: '09:00', close: '21:00', closed: false },
-      { day: 'Cuma', open: '09:00', close: '21:00', closed: false },
-      { day: 'Cumartesi', open: '09:00', close: '21:00', closed: false },
-      { day: 'Pazar', open: '09:00', close: '21:00', closed: false },
-    ],
-  },
-};
-
-const APPOINTMENTS_STORAGE_KEY = 'randevudent_appointments';
-
-function getAllAppointments(): Appointment[] {
-  if (typeof window === 'undefined') return [];
-  const appointmentsJson = localStorage.getItem(APPOINTMENTS_STORAGE_KEY);
-  return appointmentsJson ? JSON.parse(appointmentsJson) : [];
+// Helper function to check if staff member is a doctor
+function isDoctor(staff: any): boolean {
+  const titleLower = staff.title?.toLowerCase() || '';
+  return (
+    titleLower.includes('hekim') ||
+    titleLower.includes('doktor') ||
+    titleLower.includes('dr') ||
+    titleLower.includes('diş hekimi') ||
+    !!staff.specialty
+  );
 }
+
 
 // This function is kept for backward compatibility but should use createAppointment from lib/appointments.ts
 function saveAppointment(appointment: Appointment): void {
@@ -276,9 +177,10 @@ function BookAppointmentPageContent() {
   const serviceParam = searchParams?.get('service') || '';
   const timeParam = searchParams?.get('time') || '';
   
-  const clinic = mockClinics[clinicId] || mockClinics['1'];
-
   const [user, setUser] = useState<any>(null);
+  const [clinic, setClinic] = useState<any>(null);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     doctorId: doctorIdParam,
     service: serviceParam,
@@ -296,6 +198,69 @@ function BookAppointmentPageContent() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
+    const loadClinicData = () => {
+      // Get clinic data
+      const clinics = getAllClinics();
+      let foundClinic = clinics.find(c => c.id === clinicId);
+      
+      // If not found, check current clinic (for test clinic)
+      if (!foundClinic) {
+        const currentClinic = getCurrentClinic();
+        if (currentClinic && currentClinic.id === clinicId) {
+          foundClinic = currentClinic;
+        }
+      }
+      
+      if (foundClinic) {
+        // Get real staff and filter for doctors only
+        const staff = getClinicStaff(clinicId);
+        const doctorsData = staff
+          .filter(isDoctor)
+          .map(s => ({
+            id: s.id,
+            name: s.name,
+            specialty: s.specialty || s.title,
+            services: s.services || [],
+          }));
+        
+        setDoctors(doctorsData);
+        
+        // Collect all services from staff
+        const allServices = new Set<string>();
+        staff.forEach(s => {
+          if (s.services) {
+            s.services.forEach((service: string) => allServices.add(service));
+          }
+        });
+        
+        setClinic({
+          id: foundClinic.id,
+          name: foundClinic.clinicName,
+          address: foundClinic.address,
+          city: foundClinic.city,
+          district: foundClinic.district,
+          phone: foundClinic.phone,
+          email: foundClinic.email,
+          services: Array.from(allServices),
+          doctors: doctorsData,
+          workingHours: foundClinic.workingHours || [
+            { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+            { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+            { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+            { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+            { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+            { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+            { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+          ],
+        });
+      }
+      setLoading(false);
+    };
+    
+    loadClinicData();
+  }, [clinicId]);
+  
+  useEffect(() => {
     const checkAuth = async () => {
       const currentUser = await getCurrentUser();
       if (!currentUser) {
@@ -309,13 +274,15 @@ function BookAppointmentPageContent() {
 
   // Get available dates
   useEffect(() => {
-    const dates = getAllAvailableDates(clinic.workingHours);
-    setAvailableDates(dates);
-  }, [clinic.workingHours]);
+    if (clinic?.workingHours) {
+      const dates = getAllAvailableDates(clinic.workingHours);
+      setAvailableDates(dates);
+    }
+  }, [clinic?.workingHours]);
 
   // Get available times based on selected date
   useEffect(() => {
-    if (formData.date) {
+    if (formData.date && clinic?.workingHours) {
       const dayName = getDayNameInTurkish(formData.date);
       const existingAppointments = getAllAppointments();
       
@@ -335,10 +302,17 @@ function BookAppointmentPageContent() {
     } else {
       setAvailableTimes([]);
     }
-  }, [formData.date, formData.doctorId, clinic.workingHours, formData.time]);
+  }, [formData.date, formData.doctorId, clinic?.workingHours, formData.time]);
 
-  if (!user) {
-    return null; // Will redirect
+  if (!user || loading || !clinic) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-slate-400 font-light">Yükleniyor...</p>
+        </div>
+      </div>
+    );
   }
 
   const validateForm = (): boolean => {
@@ -374,7 +348,7 @@ function BookAppointmentPageContent() {
 
     setIsSubmitting(true);
 
-    const selectedDoctor = clinic.doctors?.find((d: any) => d.id === formData.doctorId);
+    const selectedDoctor = doctors.find((d: any) => d.id === formData.doctorId);
     
     const price = calculatePrice();
     
@@ -467,10 +441,10 @@ function BookAppointmentPageContent() {
 
   // Get available services based on selected doctor
   const availableServices = formData.doctorId
-    ? clinic.doctors?.find((d: any) => d.id === formData.doctorId)?.services || []
-    : clinic.services;
+    ? doctors.find((d: any) => d.id === formData.doctorId)?.services || []
+    : clinic.services || [];
 
-  const selectedDoctor = clinic.doctors?.find((d: any) => d.id === formData.doctorId);
+  const selectedDoctor = doctors.find((d: any) => d.id === formData.doctorId);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -559,7 +533,7 @@ function BookAppointmentPageContent() {
                           updateFormData('doctorId', e.target.value);
                           // Clear service if doctor changes
                           if (e.target.value) {
-                            const selectedDoc = clinic.doctors?.find((d: any) => d.id === e.target.value);
+                            const selectedDoc = doctors.find((d: any) => d.id === e.target.value);
                             if (selectedDoc?.services?.length > 0) {
                               updateFormData('service', '');
                             }
@@ -570,7 +544,7 @@ function BookAppointmentPageContent() {
                         className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
                       >
                         <option value="">Hekim seçmeyebilirsiniz</option>
-                        {clinic.doctors?.map((doctor: any) => (
+                        {doctors.map((doctor: any) => (
                           <option key={doctor.id} value={doctor.id}>
                             {doctor.name} - {doctor.specialty}
                           </option>

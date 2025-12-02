@@ -431,8 +431,8 @@ const mockClinic: Clinic = {
   phone: '0216 123 45 67',
   email: 'info@agizdis.com',
   website: 'https://www.agizdis.com',
-  rating: 4.8,
-  reviewCount: 127,
+  rating: 0,
+  reviewCount: 0,
   services: [
     'Diş Taşı Temizliği (Detartraj)',
     'Kompozit Dolgu',
