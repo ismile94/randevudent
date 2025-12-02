@@ -48,11 +48,18 @@ interface Appointment {
 // Helper function to check if staff member is a doctor
 function isDoctor(staff: any): boolean {
   const titleLower = staff.title?.toLowerCase() || '';
+  // Exclude non-medical staff
+  const excludedTitles = ['asistan', 'sekreter', 'yönetici', 'müdür', 'teknisyen', 'temizlik', 'muhasebe', 'kabul'];
+  if (excludedTitles.some(excluded => titleLower.includes(excluded))) {
+    return false;
+  }
+  // Include medical staff
   return (
     titleLower.includes('hekim') ||
     titleLower.includes('doktor') ||
     titleLower.includes('dr') ||
     titleLower.includes('diş hekimi') ||
+    titleLower.includes('uzman') ||
     !!staff.specialty
   );
 }
@@ -211,6 +218,30 @@ function BookAppointmentPageContent() {
           if (currentClinic && currentClinic.id === clinicId) {
             foundClinic = currentClinic;
           }
+        }
+        
+        // If still not found and it's test clinic, create mock clinic
+        if (!foundClinic && (clinicId === 'clinic-1' || clinicId === '1')) {
+          foundClinic = {
+            id: 'clinic-1',
+            clinicName: 'Ağız ve Diş Sağlığı Merkezi',
+            address: 'Atatürk Cad. No:123 Daire:5',
+            district: 'Kadıköy',
+            city: 'İstanbul',
+            phone: '0216 123 45 67',
+            email: 'test@klinik.com',
+            status: 'approved' as const,
+            verified: true,
+            workingHours: [
+              { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+              { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+              { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+              { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+              { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+              { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+              { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+            ],
+          };
         }
         
         if (foundClinic) {

@@ -50,14 +50,45 @@ interface Clinic {
 // Helper function to check if staff member is a doctor
 function isDoctor(staff: any): boolean {
   const titleLower = staff.title?.toLowerCase() || '';
+  // Exclude non-medical staff
+  const excludedTitles = ['asistan', 'sekreter', 'yönetici', 'müdür', 'teknisyen', 'temizlik', 'muhasebe', 'kabul'];
+  if (excludedTitles.some(excluded => titleLower.includes(excluded))) {
+    return false;
+  }
+  // Include medical staff
   return (
     titleLower.includes('hekim') ||
     titleLower.includes('doktor') ||
     titleLower.includes('dr') ||
     titleLower.includes('diş hekimi') ||
+    titleLower.includes('uzman') ||
     !!staff.specialty
   );
 }
+
+// Mock test clinic - always available for patients
+const mockTestClinic: Clinic = {
+  id: 'clinic-1',
+  name: 'Ağız ve Diş Sağlığı Merkezi',
+  address: 'Atatürk Cad. No:123 Daire:5',
+  city: 'İstanbul',
+  district: 'Kadıköy',
+  phone: '0216 123 45 67',
+  email: 'test@klinik.com',
+  services: [],
+  doctors: [],
+  workingHours: [
+    { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+    { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+    { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+    { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+    { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+    { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+    { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+  ],
+  rating: 0,
+  reviewCount: 0,
+};
 
 // Helper function to load real clinics data
 function loadRealClinics(): Clinic[] {
@@ -74,7 +105,7 @@ function loadRealClinics(): Clinic[] {
   const approvedClinics = allClinics.filter(c => c.status === 'approved');
   
   // Transform to Clinic interface with real data
-  return approvedClinics.map(clinic => {
+  const realClinics = approvedClinics.map(clinic => {
     const reviews = getClinicReviews(clinic.id);
     const staff = getClinicStaff(clinic.id);
     
@@ -122,6 +153,43 @@ function loadRealClinics(): Clinic[] {
       reviewCount: reviews.length,
     };
   });
+  
+  // Add mock test clinic if not already in the list
+  const hasTestClinic = realClinics.find(c => c.id === 'clinic-1');
+  if (!hasTestClinic) {
+    // Load real data for test clinic
+    const testClinicStaff = getClinicStaff('clinic-1');
+    const testClinicDoctors = testClinicStaff
+      .filter(isDoctor)
+      .map(s => ({
+        id: s.id,
+        name: s.name,
+        specialty: s.specialty || s.title,
+        services: s.services || [],
+      }));
+    
+    const testClinicServices = new Set<string>();
+    testClinicStaff.forEach(s => {
+      if (s.services) {
+        s.services.forEach((service: string) => testClinicServices.add(service));
+      }
+    });
+    
+    const testClinicReviews = getClinicReviews('clinic-1');
+    const testClinicRating = testClinicReviews.length > 0 ? calculateAverageRating(testClinicReviews) : 0;
+    
+    const testClinicWithData: Clinic = {
+      ...mockTestClinic,
+      doctors: testClinicDoctors,
+      services: Array.from(testClinicServices),
+      rating: testClinicRating,
+      reviewCount: testClinicReviews.length,
+    };
+    
+    return [testClinicWithData, ...realClinics];
+  }
+  
+  return realClinics;
 }
 
 // Türkiye şehirleri ve ilçeleri

@@ -569,16 +569,23 @@ export default function ClinicDetailPage() {
       };
       setClinic(clinicData);
       
-      // Get staff/doctors - show all staff with medical titles
+      // Get staff/doctors - show only doctors, exclude assistants, secretaries, managers, etc.
       const doctorsData: Doctor[] = staff
         .filter(s => {
           const titleLower = s.title.toLowerCase();
+          // Exclude non-medical staff
+          const excludedTitles = ['asistan', 'sekreter', 'yönetici', 'müdür', 'teknisyen', 'temizlik', 'muhasebe', 'kabul'];
+          if (excludedTitles.some(excluded => titleLower.includes(excluded))) {
+            return false;
+          }
+          // Include medical staff
           return (
             titleLower.includes('hekim') ||
             titleLower.includes('doktor') ||
             titleLower.includes('dr') ||
             titleLower.includes('diş hekimi') ||
-            s.specialty // If has specialty, likely a doctor
+            titleLower.includes('uzman') ||
+            !!s.specialty
           );
         })
         .map(s => {
@@ -600,12 +607,19 @@ export default function ClinicDetailPage() {
       const doctorsData: Doctor[] = staff
         .filter(s => {
           const titleLower = s.title.toLowerCase();
+          // Exclude non-medical staff
+          const excludedTitles = ['asistan', 'sekreter', 'yönetici', 'müdür', 'teknisyen', 'temizlik', 'muhasebe', 'kabul'];
+          if (excludedTitles.some(excluded => titleLower.includes(excluded))) {
+            return false;
+          }
+          // Include medical staff
           return (
             titleLower.includes('hekim') ||
             titleLower.includes('doktor') ||
             titleLower.includes('dr') ||
             titleLower.includes('diş hekimi') ||
-            s.specialty
+            titleLower.includes('uzman') ||
+            !!s.specialty
           );
         })
         .map(s => {

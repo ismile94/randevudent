@@ -349,13 +349,40 @@ export default function ClinicStaffPage() {
                     <label className="block text-sm font-light text-slate-300 mb-2">
                       Unvan *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-800/50 border border-slate-600/50 rounded-lg focus:outline-none focus:border-blue-400/50 text-white font-light"
-                      placeholder="Örn: Diş Hekimi, Hasta Kabul, Asistan"
-                    />
+                    >
+                      <option value="">Unvan seçiniz</option>
+                      <optgroup label="Hekimler">
+                        <option value="Diş Hekimi">Diş Hekimi</option>
+                        <option value="Uzman Diş Hekimi">Uzman Diş Hekimi</option>
+                        <option value="Ortodonti Uzmanı">Ortodonti Uzmanı</option>
+                        <option value="Oral ve Maxillofacial Cerrah">Oral ve Maxillofacial Cerrah</option>
+                        <option value="Periodontoloji Uzmanı">Periodontoloji Uzmanı</option>
+                        <option value="Endodonti Uzmanı">Endodonti Uzmanı</option>
+                        <option value="Prostodonti Uzmanı">Prostodonti Uzmanı</option>
+                        <option value="Pedodonti Uzmanı">Pedodonti Uzmanı</option>
+                        <option value="Estetik Diş Hekimi">Estetik Diş Hekimi</option>
+                        <option value="İmplantoloji Uzmanı">İmplantoloji Uzmanı</option>
+                      </optgroup>
+                      <optgroup label="Teknik Personel">
+                        <option value="Diş Teknisyeni">Diş Teknisyeni</option>
+                        <option value="Ortodonti Teknisyeni">Ortodonti Teknisyeni</option>
+                        <option value="Protez Teknisyeni">Protez Teknisyeni</option>
+                      </optgroup>
+                      <optgroup label="Yardımcı Personel">
+                        <option value="Diş Hekimi Asistanı">Diş Hekimi Asistanı</option>
+                        <option value="Sterilizasyon Sorumlusu">Sterilizasyon Sorumlusu</option>
+                        <option value="Hasta Kabul Sorumlusu">Hasta Kabul Sorumlusu</option>
+                        <option value="Sekreter">Sekreter</option>
+                        <option value="Muhasebe Sorumlusu">Muhasebe Sorumlusu</option>
+                        <option value="Yönetici">Yönetici</option>
+                        <option value="Klinik Müdürü">Klinik Müdürü</option>
+                        <option value="Temizlik Personeli">Temizlik Personeli</option>
+                      </optgroup>
+                    </select>
                   </div>
 
                   <div>

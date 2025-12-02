@@ -31,6 +31,28 @@ interface Clinic {
   weekendHours?: boolean;
 }
 
+// Mock test clinic - always available for patients
+const mockTestClinic: Clinic = {
+  id: 'clinic-1',
+  name: 'Ağız ve Diş Sağlığı Merkezi',
+  address: 'Atatürk Cad. No:123',
+  city: 'İstanbul',
+  district: 'Kadıköy',
+  rating: 0,
+  reviewCount: 0,
+  services: [],
+  verified: true,
+  latitude: 40.9887,
+  longitude: 29.0234,
+  acceptsInsurance: true,
+  hasParking: true,
+  wheelchairAccessible: true,
+  childFriendly: true,
+  emergencyAppointments: true,
+  eveningHours: true,
+  weekendHours: true,
+};
+
 // Helper function to load real clinics data
 function loadRealClinics(): Clinic[] {
   const clinics = getAllClinics();
@@ -46,7 +68,7 @@ function loadRealClinics(): Clinic[] {
   const approvedClinics = allClinics.filter(c => c.status === 'approved');
   
   // Transform to Clinic interface with real data
-  return approvedClinics.map(clinic => {
+  const realClinics = approvedClinics.map(clinic => {
     const reviews = getClinicReviews(clinic.id);
     const staff = getClinicStaff(clinic.id);
     
@@ -95,6 +117,58 @@ function loadRealClinics(): Clinic[] {
       weekendHours: hasWeekendHours,
     };
   });
+  
+  // Add mock test clinic if not already in the list
+  const hasTestClinic = realClinics.find(c => c.id === 'clinic-1');
+  if (!hasTestClinic) {
+    // Load real data for test clinic
+    const testClinicStaff = getClinicStaff('clinic-1');
+    const testClinicReviews = getClinicReviews('clinic-1');
+    
+    // Collect services from staff
+    const testClinicServices = new Set<string>();
+    testClinicStaff.forEach(s => {
+      if (s.services) {
+        s.services.forEach((service: string) => testClinicServices.add(service));
+      }
+    });
+    
+    // Calculate rating from reviews
+    const testClinicRating = testClinicReviews.length > 0 ? calculateAverageRating(testClinicReviews) : 0;
+    
+    // Check working hours for evening/weekend
+    const testClinicWorkingHours = [
+      { day: 'Pazartesi', open: '09:00', close: '18:00', closed: false },
+      { day: 'Salı', open: '09:00', close: '18:00', closed: false },
+      { day: 'Çarşamba', open: '09:00', close: '18:00', closed: false },
+      { day: 'Perşembe', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cuma', open: '09:00', close: '18:00', closed: false },
+      { day: 'Cumartesi', open: '09:00', close: '14:00', closed: false },
+      { day: 'Pazar', open: '09:00', close: '18:00', closed: true },
+    ];
+    const hasEveningHours = testClinicWorkingHours.some(wh => {
+      if (wh.closed) return false;
+      const [closeHour] = wh.close.split(':').map(Number);
+      return closeHour >= 18;
+    });
+    const hasWeekendHours = testClinicWorkingHours.some(wh => {
+      const weekendDays = ['Cumartesi', 'Pazar'];
+      return weekendDays.includes(wh.day) && !wh.closed;
+    });
+    
+    const testClinicWithData: Clinic = {
+      ...mockTestClinic,
+      services: Array.from(testClinicServices),
+      rating: testClinicRating,
+      reviewCount: testClinicReviews.length,
+      eveningHours: hasEveningHours,
+      weekendHours: hasWeekendHours,
+    };
+    
+    return [testClinicWithData, ...realClinics];
+  }
+  
+  return realClinics;
 }
 
 // Mesafe hesaplama fonksiyonu (Haversine formülü)
