@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
+import { getAllClinics, getCurrentClinic } from '@/lib/auth-clinic';
+import { getClinicReviews, calculateAverageRating } from '@/lib/reviews';
+import { getClinicStaff } from '@/lib/staff';
 import { Search, MapPin, Star, Clock, Filter, SlidersHorizontal, ArrowRight, Navigation2, Shield, CreditCard, Baby, Accessibility, Car, Building2, X, ChevronDown, ArrowUpDown } from 'lucide-react';
 
 interface Clinic {
@@ -28,69 +31,71 @@ interface Clinic {
   weekendHours?: boolean;
 }
 
-// Mock data - Supabase'den gelecek
-const mockClinics: Clinic[] = [
-  {
-    id: '1',
-    name: 'Ağız ve Diş Sağlığı Merkezi',
-    address: 'Atatürk Cad. No:123',
-    city: 'İstanbul',
-    district: 'Kadıköy',
-    rating: 4.8,
-    reviewCount: 127,
-    services: ['Diş Temizliği', 'İmplant', 'Ortodonti'],
-    verified: true,
-    latitude: 40.9887,
-    longitude: 29.0234,
-    acceptsInsurance: true,
-    hasParking: true,
-    wheelchairAccessible: true,
-    childFriendly: true,
-    emergencyAppointments: true,
-    eveningHours: true,
-    weekendHours: true,
-  },
-  {
-    id: '2',
-    name: 'Modern Diş Kliniği',
-    address: 'Bağdat Cad. No:456',
-    city: 'İstanbul',
-    district: 'Bostancı',
-    rating: 4.6,
-    reviewCount: 89,
-    services: ['Dolgu', 'Kanal Tedavisi', 'Estetik'],
-    verified: true,
-    latitude: 40.9700,
-    longitude: 29.1000,
-    acceptsInsurance: true,
-    hasParking: false,
-    wheelchairAccessible: false,
-    childFriendly: false,
-    emergencyAppointments: false,
-    eveningHours: true,
-    weekendHours: false,
-  },
-  {
-    id: '3',
-    name: 'Gülümseme Diş Kliniği',
-    address: 'Tunalı Hilmi Cad. No:789',
-    city: 'Ankara',
-    district: 'Çankaya',
-    rating: 4.9,
-    reviewCount: 203,
-    services: ['İmplant', 'Protez', 'Çocuk Diş Hekimliği'],
-    verified: true,
-    latitude: 39.9208,
-    longitude: 32.8541,
-    acceptsInsurance: true,
-    hasParking: true,
-    wheelchairAccessible: true,
-    childFriendly: true,
-    emergencyAppointments: true,
-    eveningHours: false,
-    weekendHours: true,
-  },
-];
+// Helper function to load real clinics data
+function loadRealClinics(): Clinic[] {
+  const clinics = getAllClinics();
+  const currentClinic = getCurrentClinic();
+  
+  // Include current clinic if logged in
+  const allClinics = [...clinics];
+  if (currentClinic && !allClinics.find(c => c.id === currentClinic.id)) {
+    allClinics.push(currentClinic);
+  }
+  
+  // Only show approved clinics
+  const approvedClinics = allClinics.filter(c => c.status === 'approved');
+  
+  // Transform to Clinic interface with real data
+  return approvedClinics.map(clinic => {
+    const reviews = getClinicReviews(clinic.id);
+    const staff = getClinicStaff(clinic.id);
+    
+    // Collect services from staff
+    const allServices = new Set<string>();
+    staff.forEach(s => {
+      if (s.services) {
+        s.services.forEach((service: string) => allServices.add(service));
+      }
+    });
+    
+    // Calculate rating from reviews
+    const rating = reviews.length > 0 ? calculateAverageRating(reviews) : 0;
+    
+    // Check working hours for evening/weekend
+    const workingHours = clinic.workingHours || [];
+    const hasEveningHours = workingHours.some(wh => {
+      if (wh.closed) return false;
+      const [openHour] = wh.open.split(':').map(Number);
+      const [closeHour] = wh.close.split(':').map(Number);
+      return closeHour >= 18; // After 6 PM
+    });
+    const hasWeekendHours = workingHours.some(wh => {
+      const weekendDays = ['Cumartesi', 'Pazar'];
+      return weekendDays.includes(wh.day) && !wh.closed;
+    });
+    
+    return {
+      id: clinic.id,
+      name: clinic.clinicName,
+      address: clinic.address,
+      city: clinic.city,
+      district: clinic.district,
+      rating,
+      reviewCount: reviews.length,
+      services: Array.from(allServices),
+      verified: clinic.verified || false,
+      latitude: clinic.latitude,
+      longitude: clinic.longitude,
+      acceptsInsurance: clinic.acceptedInsurances && clinic.acceptedInsurances.length > 0,
+      hasParking: clinic.parkingInfo && clinic.parkingInfo.length > 0,
+      wheelchairAccessible: clinic.accessibility?.wheelchair || false,
+      childFriendly: clinic.specialties?.some(s => s.toLowerCase().includes('çocuk') || s.toLowerCase().includes('pedodonti')) || false,
+      emergencyAppointments: !!clinic.emergencyContact,
+      eveningHours: hasEveningHours,
+      weekendHours: hasWeekendHours,
+    };
+  });
+}
 
 // Mesafe hesaplama fonksiyonu (Haversine formülü)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -115,7 +120,8 @@ function ClinicsPageContent() {
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'reviews' | 'name' | 'distance'>('rating');
   const [showFilters, setShowFilters] = useState(false);
-  const [filteredClinics, setFilteredClinics] = useState<Clinic[]>(mockClinics);
+  const [filteredClinics, setFilteredClinics] = useState<Clinic[]>([]);
+  const [allClinics, setAllClinics] = useState<Clinic[]>([]);
   
   // Yeni filtreler
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
@@ -128,6 +134,13 @@ function ClinicsPageContent() {
   const [emergencyAppointments, setEmergencyAppointments] = useState(false);
   const [eveningHours, setEveningHours] = useState(false);
   const [weekendHours, setWeekendHours] = useState(false);
+
+  // Load real clinics data
+  useEffect(() => {
+    const clinics = loadRealClinics();
+    setAllClinics(clinics);
+    setFilteredClinics(clinics);
+  }, []);
 
   // Kullanıcı konumunu al
   useEffect(() => {
@@ -177,7 +190,7 @@ function ClinicsPageContent() {
   ];
 
   const handleSearch = () => {
-    let filtered = [...mockClinics];
+    let filtered = [...allClinics];
 
     // Şehir filtresi
     if (searchCity.trim()) {
@@ -307,9 +320,11 @@ function ClinicsPageContent() {
 
   // Filtreleme fonksiyonu - her filtre değiştiğinde otomatik çalışır
   useEffect(() => {
-    handleSearch();
+    if (allClinics.length > 0) {
+      handleSearch();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCities, selectedServices, searchCity, searchService, minRating, onlyVerified, acceptsInsurance, hasParking, wheelchairAccessible, childFriendly, emergencyAppointments, eveningHours, weekendHours, sortBy, userLocation]);
+  }, [selectedCities, selectedServices, searchCity, searchService, minRating, onlyVerified, acceptsInsurance, hasParking, wheelchairAccessible, childFriendly, emergencyAppointments, eveningHours, weekendHours, sortBy, userLocation, allClinics]);
 
   const clearFilters = () => {
     setSearchCity('');
@@ -326,7 +341,7 @@ function ClinicsPageContent() {
     setEveningHours(false);
     setWeekendHours(false);
     setSortBy('rating');
-    setFilteredClinics(mockClinics);
+    setFilteredClinics(allClinics);
   };
 
   return (
