@@ -1,4 +1,6 @@
-// Review management utility
+// Review management utility with real-time updates
+
+import { dispatchEvent } from './events';
 
 export interface Review {
   id: string;
@@ -57,6 +59,9 @@ export function addReview(review: Omit<Review, 'id' | 'createdAt' | 'date'>): { 
   reviews.push(newReview);
   localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(reviews));
   
+  // Dispatch event for real-time updates
+  dispatchEvent('review:created', newReview);
+  
   return { success: true };
 }
 
@@ -72,6 +77,9 @@ export function updateReview(reviewId: string, updates: Partial<Review>): { succ
   reviews[reviewIndex] = { ...reviews[reviewIndex], ...updates };
   localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(reviews));
   
+  // Dispatch event for real-time updates
+  dispatchEvent('review:updated', reviews[reviewIndex]);
+  
   return { success: true };
 }
 
@@ -85,6 +93,9 @@ export function deleteReview(reviewId: string): { success: boolean; error?: stri
   }
   
   localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(filteredReviews));
+  
+  // Dispatch event for real-time updates
+  dispatchEvent('review:deleted', { id: reviewId, review: deletedReview });
   
   return { success: true };
 }

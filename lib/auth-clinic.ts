@@ -23,6 +23,54 @@ export interface Clinic {
   status: 'pending' | 'approved' | 'rejected' | 'suspended';
   createdAt: string;
   verified: boolean;
+  // Extended fields
+  description?: string;
+  workingHours?: {
+    day: string;
+    open: string;
+    close: string;
+    closed: boolean;
+  }[];
+  services?: string[];
+  specialties?: string[];
+  socialMedia?: {
+    instagram?: string;
+    facebook?: string;
+    linkedin?: string;
+    twitter?: string;
+  };
+  paymentMethods?: string[]; // ['nakit', 'kredi-karti', 'taksit', 'havale']
+  acceptedInsurances?: string[]; // ['SGK', 'Özel Sigorta', 'Bağkur']
+  parkingInfo?: string;
+  accessibility?: {
+    wheelchairAccessible?: boolean;
+    elevator?: boolean;
+    parking?: boolean;
+    wifi?: boolean;
+    waitingArea?: boolean;
+  };
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  whatsappNumber?: string;
+  certificates?: {
+    name: string;
+    issuer: string;
+    date: string;
+    imageUrl?: string;
+  }[];
+  awards?: {
+    name: string;
+    year: string;
+    description?: string;
+  }[];
+  videos?: {
+    title: string;
+    url: string;
+    type: 'youtube' | 'vimeo' | 'direct';
+    thumbnail?: string;
+  }[];
+  latitude?: number;
+  longitude?: number;
 }
 
 const CLINICS_STORAGE_KEY = 'randevudent_clinics';

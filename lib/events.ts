@@ -12,7 +12,10 @@ export type EventType =
   | 'staff:updated'
   | 'staff:deleted'
   | 'clinic:updated'
-  | 'clinic:settings:updated';
+  | 'clinic:settings:updated'
+  | 'review:created'
+  | 'review:updated'
+  | 'review:deleted';
 
 export interface EventData {
   type: EventType;
