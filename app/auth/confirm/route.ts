@@ -4,34 +4,49 @@ import { createServerClient } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  const code = searchParams.get('code');
   const token_hash = searchParams.get('token_hash');
   const type = searchParams.get('type') as EmailOtpType | null;
   const next = searchParams.get('next') ?? '/';
 
-  if (!token_hash || !type) {
+  if (!code && (!token_hash || !type)) {
     return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
   }
 
   const supabase = createServerClient();
 
-  // Verify the OTP token
-  const { data, error } = await supabase.auth.verifyOtp({
-    type,
-    token_hash,
-  });
+  // Supabase can return either a PKCE code or token_hash/type pair.
+  // Support both so password recovery links remain valid across templates.
+  let data: any = null;
+  let error: any = null;
+  let verifiedType = type;
 
-  if (error || !data.user) {
+  if (code) {
+    const result = await supabase.auth.exchangeCodeForSession(code);
+    data = result.data;
+    error = result.error;
+  } else if (token_hash && type) {
+    const result = await supabase.auth.verifyOtp({
+      type,
+      token_hash,
+    });
+    data = result.data;
+    error = result.error;
+  }
+
+  const user = data?.user ?? data?.session?.user;
+  if (error || !user) {
     console.error('Error verifying OTP:', error);
     return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
   }
 
   // Ensure user exists in our users table and update email_verified status
-  if (type === 'email') {
+  if (verifiedType === 'email' || verifiedType === 'signup' || (code && next !== '/reset-password')) {
     // Check if user exists in users table
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('id, email_verified')
-      .eq('id', data.user.id)
+      .eq('id', user.id)
       .maybeSingle();
 
     if (checkError) {
@@ -40,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     if (!existingUser) {
       // Check if TC kimlik numarası already exists (if provided)
-      const tcNumber = data.user.user_metadata?.tc_number;
+      const tcNumber = user.user_metadata?.tc_number;
       if (tcNumber && tcNumber.trim()) {
         const { data: existingUserByTC } = await supabase
           .from('users')
@@ -59,9 +74,9 @@ export async function GET(request: NextRequest) {
         .from('users')
         .insert({
           id: data.user.id,
-          name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || '',
-          email: data.user.email || '',
-          phone: data.user.user_metadata?.phone || '',
+          name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+          email: user.email || '',
+          phone: user.user_metadata?.phone || '',
           tc_number: tcNumber,
           password_hash: null, // Not needed with Supabase Auth
           email_verified: true,
@@ -85,7 +100,7 @@ export async function GET(request: NextRequest) {
         const { error: updateError } = await supabase
           .from('users')
           .update({ email_verified: true })
-          .eq('id', data.user.id);
+          .eq('id', user.id);
 
         if (updateError) {
           console.error('Error updating email_verified status:', updateError);
@@ -98,7 +113,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Handle password recovery flow
-  if (type === 'recovery') {
+  if (verifiedType === 'recovery' || next === '/reset-password') {
     // Redirect to reset password page with session
     const redirectUrl = new URL('/reset-password', request.url);
     return NextResponse.redirect(redirectUrl);
