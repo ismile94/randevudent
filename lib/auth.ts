@@ -623,8 +623,9 @@ export async function sendPasswordResetEmail(
   try {
     // Get site URL for redirect
     const siteUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    // Use /auth/confirm endpoint for PKCE flow token exchange
-    const redirectUrl = `${siteUrl}/auth/confirm?next=/reset-password`;
+    // Keep redirect URL simple for Supabase allow-list matching.
+    // The /auth/confirm route already redirects recovery flows to /reset-password.
+    const redirectUrl = `${siteUrl}/auth/confirm`;
 
     // Use Supabase Auth's built-in password reset - this automatically sends "Reset password" email
     const { data, error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase(), {
