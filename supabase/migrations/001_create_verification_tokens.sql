@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS verification_tokens (
   email TEXT NOT NULL,
   token TEXT NOT NULL UNIQUE,
   type TEXT NOT NULL CHECK (type IN ('email_verification', 'password_reset')),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   expires_at TIMESTAMPTZ NOT NULL,
   used BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),

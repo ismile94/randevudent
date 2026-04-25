@@ -33,6 +33,14 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# local db backups / restore artifacts
+*.backup
+pg-binaries.zip
+pg-tools/
+db_restore_filtered*.sql
+db_public_*.sql
+supabase/.temp/
+
 # vercel
 .vercel
 

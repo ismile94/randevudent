@@ -3,14 +3,12 @@
 
 DO $$
 BEGIN
-  -- RLS'yi etkinleştir
-  ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-  
-  -- Mevcut politikaları sil (eğer varsa)
-  DROP POLICY IF EXISTS "Public read access" ON users;
-  DROP POLICY IF EXISTS "Public insert access" ON users;
-  DROP POLICY IF EXISTS "Users can update own data" ON users;
-END $$;
+  ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+  DROP POLICY IF EXISTS "Public read access" ON public.users;
+  DROP POLICY IF EXISTS "Public insert access" ON public.users;
+  DROP POLICY IF EXISTS "Users can update own data" ON public.users;
+END;
+$$;
 
 -- Herkes kullanıcıları okuyabilir (email ile arama için gerekli)
 CREATE POLICY "Public read access"
