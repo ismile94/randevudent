@@ -28,7 +28,7 @@ function mapSupabaseUser(data: any): User {
   };
 }
 
-const SESSION_TOKEN_KEY = 'randevudent_session_token';
+const SESSION_TOKEN_KEY = 'randevudis_session_token';
 
 // Get Supabase URL for Edge Functions
 function getSupabaseUrl(): string {

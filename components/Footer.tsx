@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function Footer() {
   return (
     <footer className="mt-20 text-center text-xs text-slate-500 font-light space-y-2">
-      <p>© 2025 RandevuDent. Türkiye'de daha iyi sağlık hizmetine adanmış bir platform.</p>
+      <p>© 2025 RandevuDis. Türkiye'de daha iyi sağlık hizmetine adanmış bir platform.</p>
       <div className="flex justify-center gap-4 flex-wrap">
         <Link href="/privacy" className="hover:text-slate-300 transition">
           Gizlilik Politikası

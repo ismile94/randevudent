@@ -23,7 +23,7 @@ export interface Patient {
   updatedAt: string;
 }
 
-const PATIENTS_STORAGE_KEY = 'randevudent_patients';
+const PATIENTS_STORAGE_KEY = 'randevudis_patients';
 
 // Get all patients for a clinic
 export function getClinicPatients(clinicId: string): Patient[] {

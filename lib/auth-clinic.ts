@@ -23,8 +23,8 @@ export interface Clinic {
   verified: boolean;
 }
 
-const CLINICS_STORAGE_KEY = 'randevudent_clinics';
-const CURRENT_CLINIC_KEY = 'randevudent_current_clinic';
+const CLINICS_STORAGE_KEY = 'randevudis_clinics';
+const CURRENT_CLINIC_KEY = 'randevudis_current_clinic';
 
 // Get all clinics from localStorage
 export function getAllClinics(): Clinic[] {

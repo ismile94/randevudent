@@ -46,13 +46,13 @@ export default function Navigation({ isAuthenticated: propIsAuthenticated, userN
         {!logoError ? (
           <img 
             src="/logo.png" 
-            alt="RandevuDent Logo" 
+            alt="RandevuDis Logo" 
             className="h-14 md:h-16 object-contain transition-all duration-300 hover:scale-110 hover:brightness-110 cursor-pointer"
             onError={() => setLogoError(true)}
           />
         ) : (
           <span className="text-xl md:text-2xl font-light tracking-wider transition-all duration-300 group-hover:text-blue-400 group-hover:scale-105 cursor-pointer">
-            RandevuDent
+            RandevuDis
           </span>
         )}
       </Link>

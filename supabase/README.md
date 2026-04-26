@@ -1,6 +1,6 @@
 # Supabase Edge Functions ve Migrations
 
-Bu klasör, RandevuDent projesi için Supabase Edge Functions ve database migration'larını içerir.
+Bu klasör, RandevuDis projesi için Supabase Edge Functions ve database migration'larını içerir.
 
 ## Kurulum
 
@@ -97,7 +97,7 @@ SUPABASE_URL=your-supabase-url
 SUPABASE_ANON_KEY=your-anon-key
 SITE_URL=https://yourdomain.com  # Production için
 RESEND_API_KEY=your-resend-api-key  # E-posta göndermek için (opsiyonel)
-EMAIL_FROM=noreply@randevudent.com  # Gönderen e-posta adresi
+EMAIL_FROM=noreply@randevudis.com  # Gönderen e-posta adresi
 ```
 
 ## E-posta Servisi Yapılandırması

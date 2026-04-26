@@ -133,7 +133,7 @@ function LoginPageContent() {
             verified: clinic.verified,
           };
           
-          localStorage.setItem('randevudent_current_clinic', JSON.stringify(clinicData));
+          localStorage.setItem('randevudis_current_clinic', JSON.stringify(clinicData));
           setIsSubmitting(false);
           showToast('Klinik girişi başarılı! Yönlendiriliyorsunuz...', 'success');
           setTimeout(() => {
@@ -156,7 +156,7 @@ function LoginPageContent() {
       );
       
       if (clinic) {
-        localStorage.setItem('randevudent_current_clinic', JSON.stringify(clinic));
+        localStorage.setItem('randevudis_current_clinic', JSON.stringify(clinic));
         setIsSubmitting(false);
         showToast('Klinik girişi başarılı! Yönlendiriliyorsunuz...', 'success');
         setTimeout(() => {

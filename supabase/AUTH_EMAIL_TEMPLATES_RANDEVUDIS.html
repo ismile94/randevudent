@@ -1,0 +1,115 @@
+<!--
+RandevuDis - Supabase Auth Email Templates
+Use each section in Supabase Dashboard > Authentication > Email Templates.
+-->
+
+<!-- =========================
+1) Confirm Signup
+========================= -->
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RandevuDis - Hesap Dogrulama</title>
+</head>
+<body style="margin:0;padding:0;background:#020617;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#020617;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#0f172a;border:1px solid #334155;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="padding:24px 28px;background:linear-gradient(135deg,#1d4ed8,#06b6d4);">
+              <h1 style="margin:0;font-size:24px;color:#ffffff;">RandevuDis</h1>
+              <p style="margin:8px 0 0;color:#e0f2fe;font-size:14px;">Dis randevunuzu dakikalar icinde olusturun.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px;">
+              <h2 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">Kaydini Dogrula</h2>
+              <p style="margin:0 0 20px;line-height:1.6;color:#cbd5e1;">Hesabini aktif etmek icin asagidaki butona tikla.</p>
+              <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;">E-postami Dogrula</a>
+              <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">Buton calismazsa bu linki tarayicina yapistir:<br /><a href="{{ .ConfirmationURL }}" style="color:#38bdf8;word-break:break-all;">{{ .ConfirmationURL }}</a></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+
+<!-- =========================
+2) Confirm Change of Email
+========================= -->
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RandevuDis - E-posta Degisikligi</title>
+</head>
+<body style="margin:0;padding:0;background:#020617;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#020617;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#0f172a;border:1px solid #334155;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="padding:24px 28px;background:linear-gradient(135deg,#1d4ed8,#06b6d4);">
+              <h1 style="margin:0;font-size:24px;color:#ffffff;">RandevuDis</h1>
+              <p style="margin:8px 0 0;color:#e0f2fe;font-size:14px;">Guvenli hesap yonetimi</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px;">
+              <h2 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">E-posta Degisikligini Onayla</h2>
+              <p style="margin:0 0 20px;line-height:1.6;color:#cbd5e1;">E-posta adresini guncellemek icin asagidaki butonu kullan.</p>
+              <p style="margin:0 0 14px;font-size:14px;color:#94a3b8;">Eski: <strong style="color:#e2e8f0;">{{ .Email }}</strong><br />Yeni: <strong style="color:#e2e8f0;">{{ .NewEmail }}</strong></p>
+              <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;">E-posta Degisikligini Onayla</a>
+              <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">Bu islemi sen yapmadiysan hesaba girip sifreni degistirmen onerilir.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+
+<!-- =========================
+3) Reset Password
+========================= -->
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RandevuDis - Sifre Sifirlama</title>
+</head>
+<body style="margin:0;padding:0;background:#020617;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#020617;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#0f172a;border:1px solid #334155;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="padding:24px 28px;background:linear-gradient(135deg,#1d4ed8,#06b6d4);">
+              <h1 style="margin:0;font-size:24px;color:#ffffff;">RandevuDis</h1>
+              <p style="margin:8px 0 0;color:#e0f2fe;font-size:14px;">Guvenli sifre yenileme</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px;">
+              <h2 style="margin:0 0 12px;font-size:22px;color:#f8fafc;">Sifreni Yenile</h2>
+              <p style="margin:0 0 20px;line-height:1.6;color:#cbd5e1;">Sifre sifirlama talebin alindi. Devam etmek icin asagidaki butona tikla.</p>
+              <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;">Sifremi Sifirla</a>
+              <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">Bu istegi sen yapmadiysan bu e-postayi yok sayabilirsin.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

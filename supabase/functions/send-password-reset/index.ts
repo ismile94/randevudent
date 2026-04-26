@@ -147,7 +147,7 @@ serve(async (req: Request) => {
           </div>
         </div>
         <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
-          <p>© ${new Date().getFullYear()} RandevuDent. Tüm hakları saklıdır.</p>
+          <p>© ${new Date().getFullYear()} RandevuDis. Tüm hakları saklıdır.</p>
         </div>
       </body>
       </html>
@@ -164,7 +164,7 @@ Bu link 1 saat geçerlidir ve sadece bir kez kullanılabilir.
 
 Eğer bu talebi siz yapmadıysanız, bu e-postayı görmezden gelebilirsiniz.
 
-© ${new Date().getFullYear()} RandevuDent. Tüm hakları saklıdır.
+© ${new Date().getFullYear()} RandevuDis. Tüm hakları saklıdır.
     `
 
     // E-posta gönderme için Resend kullanımı (opsiyonel)
@@ -178,9 +178,9 @@ Eğer bu talebi siz yapmadıysanız, bu e-postayı görmezden gelebilirsiniz.
           'Authorization': `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: Deno.env.get('EMAIL_FROM') || 'noreply@randevudent.com',
+          from: Deno.env.get('EMAIL_FROM') || 'noreply@randevudis.com',
           to: email,
-          subject: 'RandevuDent - Şifre Sıfırlama',
+          subject: 'RandevuDis - Şifre Sıfırlama',
           html: emailHtml,
           text: emailText,
         }),

@@ -1,6 +1,6 @@
 // Favorites management utility
 
-const FAVORITES_STORAGE_KEY = 'randevudent_favorites';
+const FAVORITES_STORAGE_KEY = 'randevudis_favorites';
 
 export interface Favorite {
   id: string;

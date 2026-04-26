@@ -101,7 +101,7 @@ export default function ClinicSettingsPage() {
             city: result.clinic.city,
             postalCode: result.clinic.postal_code,
           };
-          localStorage.setItem('randevudent_current_clinic', JSON.stringify(updatedClinic));
+          localStorage.setItem('randevudis_current_clinic', JSON.stringify(updatedClinic));
         }
         alert('Ayarlar başarıyla kaydedildi');
       } else {

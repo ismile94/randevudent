@@ -12,7 +12,7 @@ export interface Review {
   createdAt: string;
 }
 
-const REVIEWS_STORAGE_KEY = 'randevudent_reviews';
+const REVIEWS_STORAGE_KEY = 'randevudis_reviews';
 
 // Get all reviews
 export function getAllReviews(): Review[] {

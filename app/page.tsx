@@ -41,7 +41,7 @@ export interface Appointment {
   status: 'pending' | 'confirmed' | 'cancelled';
 }
 
-export default function RandevuDent() {
+export default function RandevuDis() {
   const router = useRouter();
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [searchCity, setSearchCity] = useState('');

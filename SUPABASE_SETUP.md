@@ -39,7 +39,7 @@ Supabase Dashboard > Project Settings > Edge Functions > Secrets bölümünden:
 ```
 SITE_URL=http://localhost:3000
 RESEND_API_KEY=your-resend-api-key (opsiyonel - e-posta göndermek için)
-EMAIL_FROM=noreply@randevudent.com
+EMAIL_FROM=noreply@randevudis.com
 ```
 
 **Not:** E-posta göndermek için Resend API key gerekli. Eğer yoksa:

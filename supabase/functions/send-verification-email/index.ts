@@ -97,7 +97,7 @@ serve(async (req: Request) => {
         <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
           <p style="font-size: 16px; margin-bottom: 20px;">Merhaba <strong>${name}</strong>,</p>
           <p style="font-size: 16px; margin-bottom: 20px;">
-            RandevuDent hesabınızı aktifleştirmek için e-posta adresinizi doğrulamanız gerekiyor.
+            RandevuDis hesabınızı aktifleştirmek için e-posta adresinizi doğrulamanız gerekiyor.
           </p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${verificationLink}" 
@@ -118,7 +118,7 @@ serve(async (req: Request) => {
           </div>
         </div>
         <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
-          <p>© ${new Date().getFullYear()} RandevuDent. Tüm hakları saklıdır.</p>
+          <p>© ${new Date().getFullYear()} RandevuDis. Tüm hakları saklıdır.</p>
         </div>
       </body>
       </html>
@@ -127,13 +127,13 @@ serve(async (req: Request) => {
     const emailText = `
 Merhaba ${name},
 
-RandevuDent hesabınızı aktifleştirmek için e-posta adresinizi doğrulamanız gerekiyor.
+RandevuDis hesabınızı aktifleştirmek için e-posta adresinizi doğrulamanız gerekiyor.
 
 Doğrulama linki: ${verificationLink}
 
 Bu link 24 saat geçerlidir. Eğer bu işlemi siz yapmadıysanız, bu e-postayı görmezden gelebilirsiniz.
 
-© ${new Date().getFullYear()} RandevuDent. Tüm hakları saklıdır.
+© ${new Date().getFullYear()} RandevuDis. Tüm hakları saklıdır.
     `
 
     // Supabase'in e-posta gönderme servisini kullan
@@ -154,9 +154,9 @@ Bu link 24 saat geçerlidir. Eğer bu işlemi siz yapmadıysanız, bu e-postayı
           'Authorization': `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: Deno.env.get('EMAIL_FROM') || 'noreply@randevudent.com',
+          from: Deno.env.get('EMAIL_FROM') || 'noreply@randevudis.com',
           to: email,
-          subject: 'RandevuDent - E-posta Doğrulama',
+          subject: 'RandevuDis - E-posta Doğrulama',
           html: emailHtml,
           text: emailText,
         }),

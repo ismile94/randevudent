@@ -64,7 +64,7 @@ function isDoctor(staff: any): boolean {
   );
 }
 
-const APPOINTMENTS_STORAGE_KEY = 'randevudent_appointments';
+const APPOINTMENTS_STORAGE_KEY = 'randevudis_appointments';
 
 function getAllAppointments(): Appointment[] {
   if (typeof window === 'undefined') return [];

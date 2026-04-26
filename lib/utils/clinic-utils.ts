@@ -39,7 +39,7 @@ export async function getCurrentClinicWithUUID(): Promise<{ clinic: any; clinicI
         status: clinicResult.clinic.status || currentClinic.status,
         verified: clinicResult.clinic.verified || currentClinic.verified,
       };
-      localStorage.setItem('randevudent_current_clinic', JSON.stringify(updatedClinic));
+      localStorage.setItem('randevudis_current_clinic', JSON.stringify(updatedClinic));
       return { clinic: updatedClinic, clinicId: clinicResult.clinic.id };
     } else {
       // Clinic not found in Supabase
